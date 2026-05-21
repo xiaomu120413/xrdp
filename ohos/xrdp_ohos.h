@@ -12,12 +12,20 @@ extern "C"
 #define XRDP_OHOS_API
 #endif
 
+#define XRDP_OHOS_API_VERSION 1
 #define XRDP_OHOS_MOD_VERSION 4
 #define XRDP_OHOS_INPUT_EVENT_VERSION 1
 #define XRDP_OHOS_BACKEND_EVENT_VERSION 2
 #define XRDP_OHOS_FRAME_MAX_DIMENSION 8192
 #define XRDP_OHOS_AUDIO_MAX_BYTES 131072
 #define XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC 0x00000001U
+#define XRDP_OHOS_FEATURE_RAW_FRAME_SUBMIT 0x00000001U
+#define XRDP_OHOS_FEATURE_ENCODED_H264_SUBMIT 0x00000002U
+#define XRDP_OHOS_FEATURE_AUDIO_SUBMIT 0x00000004U
+#define XRDP_OHOS_FEATURE_INPUT_CALLBACK 0x00000008U
+#define XRDP_OHOS_FEATURE_BACKEND_EVENT_CALLBACK 0x00000010U
+#define XRDP_OHOS_FEATURE_CLIPRDR 0x00000020U
+#define XRDP_OHOS_FEATURE_RDPSND 0x00000040U
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -81,6 +89,18 @@ enum xrdp_ohos_backend_event_type
     XRDP_OHOS_BACKEND_EVENT_SUPPRESS_OUTPUT = 4,
     XRDP_OHOS_BACKEND_EVENT_MONITOR_RESIZE = 5,
     XRDP_OHOS_BACKEND_EVENT_MONITOR_FULL_INVALIDATE = 6
+};
+
+struct xrdp_ohos_abi_info
+{
+    uint32_t size;
+    uint32_t api_version;
+    uint32_t mod_version;
+    uint32_t input_event_version;
+    uint32_t backend_event_version;
+    uint32_t feature_flags;
+    uint32_t status_flags;
+    uint32_t reserved;
 };
 
 struct xrdp_ohos_frame
@@ -163,6 +183,9 @@ typedef void (*xrdp_ohos_input_event_fn)(
     const struct xrdp_ohos_input_event *event, void *user_data);
 typedef void (*xrdp_ohos_backend_event_fn)(
     const struct xrdp_ohos_backend_event *event, void *user_data);
+
+XRDP_OHOS_API int
+xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info);
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame);

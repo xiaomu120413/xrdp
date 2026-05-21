@@ -789,14 +789,14 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
     {
         case WM_KEYDOWN:
         case WM_KEYUP:
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: key %s flags=%ld code=%ld extra=(%ld,%ld)",
                 msg == WM_KEYDOWN ? "down" : "up",
                 param1, param2, param3, param4);
             break;
 
         case WM_KEYBRD_SYNC:
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: key_sync device_flags=%ld key_flags=%ld",
                 param1, param2);
             break;
@@ -805,7 +805,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
             self->mouse_move_count++;
             if ((self->mouse_move_count % OHOS_MOUSE_LOG_SAMPLE) == 0)
             {
-                LOG(LOG_LEVEL_INFO,
+                LOG(LOG_LEVEL_DEBUG,
                     "xrdp.ohos.input: mouse_move x=%ld y=%ld count=%d",
                     param1, param2, self->mouse_move_count);
             }
@@ -829,7 +829,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         case WM_BUTTON8UP:
         case WM_BUTTON9DOWN:
         case WM_BUTTON9UP:
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: mouse_button msg=%d x=%ld y=%ld",
                 msg, param1, param2);
             break;
@@ -1102,6 +1102,48 @@ mod_exit(tintptr handle)
         g_free(self);
     }
     return 0;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info)
+{
+    uint32_t caller_size;
+    uint32_t write_size;
+
+    if (info == 0)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
+    }
+
+    caller_size = info->size;
+    write_size = caller_size < sizeof(struct xrdp_ohos_abi_info) ?
+                 caller_size : sizeof(struct xrdp_ohos_abi_info);
+    if (write_size > 0)
+    {
+        g_memset(info, 0, write_size);
+    }
+    if (caller_size >= sizeof(info->size))
+    {
+        info->size = sizeof(struct xrdp_ohos_abi_info);
+    }
+    if (caller_size < sizeof(struct xrdp_ohos_abi_info))
+    {
+        return XRDP_OHOS_BACKEND_STATUS_UNSUPPORTED_FORMAT;
+    }
+
+    info->api_version = XRDP_OHOS_API_VERSION;
+    info->mod_version = XRDP_OHOS_MOD_VERSION;
+    info->input_event_version = XRDP_OHOS_INPUT_EVENT_VERSION;
+    info->backend_event_version = XRDP_OHOS_BACKEND_EVENT_VERSION;
+    info->feature_flags = XRDP_OHOS_FEATURE_RAW_FRAME_SUBMIT |
+                          XRDP_OHOS_FEATURE_ENCODED_H264_SUBMIT |
+                          XRDP_OHOS_FEATURE_AUDIO_SUBMIT |
+                          XRDP_OHOS_FEATURE_INPUT_CALLBACK |
+                          XRDP_OHOS_FEATURE_BACKEND_EVENT_CALLBACK |
+                          XRDP_OHOS_FEATURE_CLIPRDR |
+                          XRDP_OHOS_FEATURE_RDPSND;
+    info->status_flags = 0;
+    return XRDP_OHOS_BACKEND_STATUS_OK;
 }
 
 int EXPORT_CC
