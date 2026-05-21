@@ -43,6 +43,7 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_transfer.c \
   ohos_display_geometry.c \
   ohos_events.c \
+  ohos_frame.c \
   ohos_gfx_avc420.c \
   ohos_gfx_avc420.h \
   ohos_input.c \

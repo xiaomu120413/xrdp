@@ -145,6 +145,15 @@ void
 ohos_clear_h264_queue_locked(struct ohos_mod *self);
 
 void
+ohos_discard_pending_frame(struct ohos_mod *self);
+
+int
+ohos_draw_external_frame(struct ohos_mod *self, int *painted);
+
+int
+ohos_clear_frame(struct ohos_mod *self, const char *reason);
+
+void
 ohos_store_frame_trace_locked(struct ohos_mod *self);
 
 int
