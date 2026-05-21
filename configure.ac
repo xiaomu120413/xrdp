@@ -104,8 +104,13 @@ if test "x$enable_ohos" = "xyes"; then
   AC_CHECK_HEADER([window_manager/oh_display_manager.h], [],
     [AC_MSG_ERROR([HarmonyOS native display manager header is required for --enable-ohos])],
     [[#include <stdbool.h>]])
+  AC_CHECK_HEADER([multimodalinput/oh_input_manager.h], [],
+    [AC_MSG_ERROR([HarmonyOS input manager header is required for --enable-ohos])],
+    [[#include <stdbool.h>]])
+  AC_CHECK_HEADER([multimodalinput/oh_key_code.h], [],
+    [AC_MSG_ERROR([HarmonyOS key code header is required for --enable-ohos])])
   XRDP_OHOS_LIBS="-lhilog_ndk.z"
-  XRDP_OHOS_BACKEND_LIBS="-lpasteboard -ludmf -lohfileuri -limage_ndk.z -limage_source -lpixelmap_ndk.z -lpixelmap -lnative_display_manager"
+  XRDP_OHOS_BACKEND_LIBS="-lpasteboard -ludmf -lohfileuri -limage_ndk.z -limage_source -lpixelmap_ndk.z -lpixelmap -lnative_display_manager -lohinput"
   XRDP_OHOS_AVCODEC_LIBS="-lnative_media_venc -lnative_media_codecbase -lnative_media_core"
 fi
 AC_SUBST([XRDP_OHOS_LIBS])

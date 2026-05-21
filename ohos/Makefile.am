@@ -43,6 +43,11 @@ libxrdpohos_la_SOURCES = \
   ohos_display_geometry.c \
   ohos_gfx_avc420.c \
   ohos_gfx_avc420.h \
+  ohos_input.c \
+  ohos_input_auth.c \
+  ohos_input.h \
+  ohos_input_keymap.c \
+  ohos_input_mouse.c \
   ohos_rdpsnd.c \
   ohos_rdpsnd_channel.c \
   ohos_rdpsnd.h \

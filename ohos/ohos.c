@@ -19,6 +19,7 @@
 #define XRDP_OHOS_API EXPORT_CC
 #include "ohos_cliprdr.h"
 #include "ohos_gfx_avc420.h"
+#include "ohos_input.h"
 #include "ohos_rdpsnd.h"
 #include "xrdp_ohos.h"
 
@@ -118,6 +119,7 @@ struct ohos_mod
     int h264_drop_count;
     int h264_waiting_for_sync;
     char client_name[256];
+    struct ohos_input_context input;
     struct ohos_cliprdr cliprdr;
     struct ohos_rdpsnd rdpsnd;
     struct ohos_frame_trace frame_traces[OHOS_FRAME_TRACE_SLOTS];
@@ -314,6 +316,7 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
         (unsigned long long)self->suppress_output_count,
         (unsigned long long)self->monitor_resize_count,
         (unsigned long long)self->monitor_full_invalidate_count);
+    ohos_input_log_summary(&self->input, reason);
     LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.session: rdpsnd submitted=%u sent_chunks=%u sent_bytes=%u dropped=%d errors=%u app_audio_frames=%llu app_audio_bytes=%llu cliprdr local_lists=%u remote_lists=%u local_requests=%u remote_responses=%u pb_reads=%u pb_writes=%u pb_changes=%u suppressed=%u errors=%u",
         self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,
@@ -426,6 +429,38 @@ ohos_update_gfx_trace(struct ohos_mod *self, int frame_id, int format,
 }
 
 static void
+ohos_fill_input_event(struct ohos_mod *self, int msg, tbus param1,
+                      tbus param2, tbus param3, tbus param4,
+                      struct xrdp_ohos_input_event *event)
+{
+    if (event == 0)
+    {
+        return;
+    }
+
+    event->version = XRDP_OHOS_INPUT_EVENT_VERSION;
+    event->msg = msg;
+    event->param1 = (long)param1;
+    event->param2 = (long)param2;
+    event->param3 = (long)param3;
+    event->param4 = (long)param4;
+    if (self != 0)
+    {
+        event->width = self->width;
+        event->height = self->height;
+        event->bpp = self->bpp;
+        event->connected = self->connected;
+    }
+    else
+    {
+        event->width = 0;
+        event->height = 0;
+        event->bpp = 0;
+        event->connected = 0;
+    }
+}
+
+static void
 ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
                          tbus param2, tbus param3, tbus param4)
 {
@@ -448,16 +483,7 @@ ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
     }
 
     self->input_forwarded_count++;
-    event.version = XRDP_OHOS_INPUT_EVENT_VERSION;
-    event.msg = msg;
-    event.param1 = (long)param1;
-    event.param2 = (long)param2;
-    event.param3 = (long)param3;
-    event.param4 = (long)param4;
-    event.width = self->width;
-    event.height = self->height;
-    event.bpp = self->bpp;
-    event.connected = self->connected;
+    ohos_fill_input_event(self, msg, param1, param2, param3, param4, &event);
     callback(&event, user_data);
 }
 
@@ -865,6 +891,7 @@ ohos_mod_connect(struct mod *mod, int fd)
     int painted = 0;
     int rv;
     ohos_reset_session_stats(self);
+    ohos_input_start_session(&self->input);
     self->connected = 1;
 
     if (ohos_lock_frame_state() == 0)
@@ -875,6 +902,7 @@ ohos_mod_connect(struct mod *mod, int fd)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    ohos_input_prime_authorization("session connect");
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT,
@@ -893,6 +921,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
                tbus param3, tbus param4)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
+    struct xrdp_ohos_input_event input_event;
 
     switch (msg)
     {
@@ -967,6 +996,9 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
             break;
     }
 
+    ohos_fill_input_event(self, msg, param1, param2, param3, param4,
+                          &input_event);
+    (void)ohos_input_handle_event(&self->input, &input_event);
     ohos_forward_input_event(self, msg, param1, param2, param3, param4);
     return 0;
 }
@@ -984,6 +1016,7 @@ ohos_mod_end(struct mod *mod)
     struct ohos_mod *self = ohos_from_mod(mod);
     self->connected = 0;
     ohos_log_session_summary(self, "end");
+    ohos_input_reset(&self->input, "session end");
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
     if (ohos_lock_frame_state() == 0)
@@ -1171,6 +1204,7 @@ mod_init(void)
     self = (struct ohos_mod *)g_malloc(sizeof(struct ohos_mod), 1);
     ohos_ensure_frame_mutex();
     self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
+    ohos_input_init(&self->input);
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
     ohos_rdpsnd_init(&self->rdpsnd, &self->mod, self->frame_wait_obj);
     self->mod.size = sizeof(struct mod);
@@ -1212,6 +1246,7 @@ mod_exit(tintptr handle)
             ohos_unlock_frame_state();
         }
         ohos_discard_pending_frame(self);
+        ohos_input_deinit(&self->input);
         ohos_cliprdr_deinit(&self->cliprdr);
         ohos_rdpsnd_deinit(&self->rdpsnd);
         if (self->frame_wait_obj != 0)
@@ -1261,7 +1296,8 @@ xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info)
                           XRDP_OHOS_FEATURE_BACKEND_EVENT_CALLBACK |
                           XRDP_OHOS_FEATURE_CLIPRDR |
                           XRDP_OHOS_FEATURE_RDPSND |
-                          XRDP_OHOS_FEATURE_DISPLAY_GEOMETRY;
+                          XRDP_OHOS_FEATURE_DISPLAY_GEOMETRY |
+                          XRDP_OHOS_FEATURE_DIRECT_INPUT;
     info->status_flags = 0;
     return XRDP_OHOS_BACKEND_STATUS_OK;
 }
