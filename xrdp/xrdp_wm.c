@@ -643,6 +643,7 @@ xrdp_wm_init(struct xrdp_wm *self)
     char default_section_name[256];
     char section_name[256];
     char autorun_name[256];
+    int do_autologin;
     int dpi;
 
     LOG(LOG_LEVEL_DEBUG, "in xrdp_wm_init: ");
@@ -669,7 +670,18 @@ xrdp_wm_init(struct xrdp_wm *self)
     xrdp_wm_load_static_pointers(self);
     self->screen->bg_color = self->xrdp_config->cfg_globals.ls_top_window_bg_color;
 
-    if (self->session->client_info->rdp_autologin)
+    do_autologin = self->session->client_info->rdp_autologin;
+#if defined(XRDP_OHOS)
+    if (!do_autologin && autorun_name[0] != 0)
+    {
+        do_autologin = 1;
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.autorun: using autorun section \"%s\" without client credentials",
+            autorun_name);
+    }
+#endif
+
+    if (do_autologin)
     {
         /*
          * NOTE: this should eventually be accessed from self->xrdp_config

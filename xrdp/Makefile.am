@@ -35,6 +35,12 @@ AM_CPPFLAGS = \
 XRDP_EXTRA_LIBS =
 XRDP_EXTRA_SOURCES =
 
+if XRDP_OHOS
+AM_CPPFLAGS += -DXRDP_OHOS_AVCODEC
+XRDP_EXTRA_LIBS += $(XRDP_OHOS_AVCODEC_LIBS)
+XRDP_EXTRA_SOURCES += xrdp_encoder_ohos_avcodec.c xrdp_encoder_ohos_avcodec.h
+endif
+
 if XRDP_RFXCODEC
 AM_CPPFLAGS += -DXRDP_RFXCODEC
 AM_CPPFLAGS += -I$(top_srcdir)/librfxcodec/include

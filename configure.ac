@@ -84,6 +84,7 @@ AC_ARG_ENABLE(ohos, AS_HELP_STRING([--enable-ohos],
 AM_CONDITIONAL(XRDP_OHOS, [test x$enable_ohos = xyes])
 XRDP_OHOS_LIBS=
 XRDP_OHOS_BACKEND_LIBS=
+XRDP_OHOS_AVCODEC_LIBS=
 if test "x$enable_ohos" = "xyes"; then
   AC_DEFINE([XRDP_OHOS], 1, [Build a minimal HarmonyOS server front end])
   AC_CHECK_HEADER([hilog/log.h], [],
@@ -94,11 +95,19 @@ if test "x$enable_ohos" = "xyes"; then
     [AC_MSG_ERROR([HarmonyOS UDMF header is required for --enable-ohos])])
   AC_CHECK_HEADER([multimedia/image_framework/image/pixelmap_native.h], [],
     [AC_MSG_ERROR([HarmonyOS PixelMap header is required for --enable-ohos])])
+  AC_CHECK_HEADER([multimedia/player_framework/native_avcodec_videoencoder.h], [],
+    [AC_MSG_ERROR([HarmonyOS AVCodec video encoder header is required for --enable-ohos])])
+  AC_CHECK_HEADER([multimedia/player_framework/native_avcapability.h], [],
+    [AC_MSG_ERROR([HarmonyOS AVCodec capability header is required for --enable-ohos])])
+  AC_CHECK_HEADER([multimedia/player_framework/native_avbuffer.h], [],
+    [AC_MSG_ERROR([HarmonyOS AVBuffer header is required for --enable-ohos])])
   XRDP_OHOS_LIBS="-lhilog_ndk.z"
   XRDP_OHOS_BACKEND_LIBS="-lpasteboard -ludmf -lohfileuri -limage_ndk.z -limage_source -lpixelmap_ndk.z -lpixelmap"
+  XRDP_OHOS_AVCODEC_LIBS="-lnative_media_venc -lnative_media_codecbase -lnative_media_core"
 fi
 AC_SUBST([XRDP_OHOS_LIBS])
 AC_SUBST([XRDP_OHOS_BACKEND_LIBS])
+AC_SUBST([XRDP_OHOS_AVCODEC_LIBS])
 
 AC_ARG_ENABLE(tests,
               AS_HELP_STRING([--enable-tests],

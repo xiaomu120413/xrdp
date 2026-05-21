@@ -15,6 +15,7 @@
 #include "xup.h"
 
 #include "ohos_cliprdr.h"
+#include "ohos_gfx_avc420.h"
 
 #define XRDP_OHOS_API EXPORT_CC
 #include "xrdp_ohos.h"
@@ -286,6 +287,23 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     if (paint_width <= 0 || paint_height <= 0 ||
             mod->server_begin_update == 0 || mod->server_end_update == 0)
     {
+        g_free(data);
+        return 0;
+    }
+
+    if (ohos_gfx_send_avc420_frame(mod, data, frame_width, frame_height,
+                                   paint_width, paint_height, sequence,
+                                   source_sequence) == 0)
+    {
+        self->frame_draw_count++;
+        if (self->frame_draw_count <= 3 ||
+                (self->frame_draw_count % 30) == 0)
+        {
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.frame: queued AVC420 frame seq=%d source_seq=%llu size=%dx%d dst=%dx%d",
+                sequence, (unsigned long long)source_sequence, frame_width,
+                frame_height, paint_width, paint_height);
+        }
         g_free(data);
         return 0;
     }

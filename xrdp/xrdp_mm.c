@@ -42,6 +42,10 @@
 #include "xrdp_encoder_openh264.h"
 #endif
 
+#if defined(XRDP_OHOS_AVCODEC)
+#include "xrdp_encoder_ohos_avcodec.h"
+#endif
+
 /* Forward declarations */
 static int
 xrdp_mm_setup_mod1(struct xrdp_mm *self);
@@ -56,6 +60,15 @@ xrdp_mm_send_unicode_shutdown(struct xrdp_mm *self, struct trans *trans);
 static void
 init_libh264_loaded(struct xrdp_mm *self)
 {
+#if defined(XRDP_OHOS_AVCODEC)
+    self->libh264_loaded = xrdp_encoder_ohos_avcodec_install_ok();
+    if (self->libh264_loaded)
+    {
+        return;
+    }
+    LOG(LOG_LEVEL_WARNING, "OHOS AVCodec hardware H.264 encoder is not "
+        "available; trying other configured H.264 encoders");
+#endif
 #if defined(XRDP_OPENH264)
     // Note that if this fails, and x264 is also configured, x264
     // will not be considered as a fallback.
@@ -65,7 +78,7 @@ init_libh264_loaded(struct xrdp_mm *self)
         LOG(LOG_LEVEL_ERROR, "OpenH264 Codec is not installed correctly. "
             "H.264 will not be used");
     }
-#elif defined (XRDP_H264)
+#elif defined(XRDP_X264) || defined(XRDP_NVENC)
     self->libh264_loaded = 1;
 #else
     self->libh264_loaded = 0;
