@@ -24,6 +24,7 @@
 
 #define OHOS_MOUSE_LOG_SAMPLE 64
 #define OHOS_FRAME_TRACE_SLOTS 256
+#define OHOS_H264_QUEUE_LIMIT 30
 
 struct ohos_frame_trace
 {
@@ -45,6 +46,27 @@ struct ohos_frame_trace
     uint64_t gfx_enqueue_done_us;
     uint32_t gfx_convert_us;
     uint32_t gfx_enqueue_us;
+};
+
+struct ohos_queued_h264_frame
+{
+    char *data;
+    size_t data_bytes;
+    int width;
+    int height;
+    int sequence;
+    uint64_t source_sequence;
+    uint64_t capture_timestamp_us;
+    uint64_t capture_acquire_us;
+    uint64_t bridge_queue_us;
+    uint64_t submitter_enqueue_us;
+    uint64_t submitter_submit_us;
+    uint64_t submitter_copy_us;
+    uint64_t backend_submit_us;
+    uint64_t backend_copy_done_us;
+    uint64_t backend_pending_us;
+    unsigned int flags;
+    struct ohos_queued_h264_frame *next;
 };
 
 struct ohos_mod
@@ -75,6 +97,11 @@ struct ohos_mod
     int frame_pending;
     char *frame_data;
     tintptr frame_wait_obj;
+    struct ohos_queued_h264_frame *h264_head;
+    struct ohos_queued_h264_frame *h264_tail;
+    int h264_queue_count;
+    int h264_drop_count;
+    int h264_waiting_for_sync;
     char client_name[256];
     struct ohos_cliprdr cliprdr;
     struct ohos_rdpsnd rdpsnd;
@@ -386,6 +413,50 @@ ohos_min(int a, int b)
     return (a < b) ? a : b;
 }
 
+static void
+ohos_free_h264_frame(struct ohos_queued_h264_frame *frame)
+{
+    if (frame == 0)
+    {
+        return;
+    }
+    g_free(frame->data);
+    g_free(frame);
+}
+
+static void
+ohos_clear_h264_queue_locked(struct ohos_mod *self)
+{
+    struct ohos_queued_h264_frame *frame;
+    struct ohos_queued_h264_frame *next;
+
+    if (self == 0)
+    {
+        return;
+    }
+
+    frame = self->h264_head;
+    while (frame != 0)
+    {
+        next = frame->next;
+        ohos_free_h264_frame(frame);
+        frame = next;
+    }
+    self->h264_head = 0;
+    self->h264_tail = 0;
+    self->h264_queue_count = 0;
+    self->h264_waiting_for_sync = 0;
+}
+
+static void
+ohos_signal_more_frames(tintptr wait_obj, int more_pending)
+{
+    if (more_pending && wait_obj != 0)
+    {
+        g_set_wait_obj(wait_obj);
+    }
+}
+
 static int
 ohos_fill_rect(struct mod *mod, int color, int x, int y, int cx, int cy)
 {
@@ -416,6 +487,7 @@ ohos_discard_pending_frame(struct ohos_mod *self)
     self->frame_format = 0;
     self->frame_stride = 0;
     self->frame_data_bytes = 0;
+    ohos_clear_h264_queue_locked(self);
     ohos_unlock_frame_state();
 
     if (data != 0)
@@ -446,8 +518,11 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     uint64_t backend_pending_us = 0;
     uint64_t draw_start_us;
     struct ohos_gfx_avc420_trace gfx_trace;
+    struct ohos_queued_h264_frame *queued_h264 = 0;
+    tintptr wait_obj = 0;
     int paint_width;
     int paint_height;
+    int more_pending = 0;
     int rv = 0;
 
     if (self == 0)
@@ -464,7 +539,43 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
         return 1;
     }
 
-    if (self->frame_pending && self->frame_data != 0)
+    if (self->h264_head != 0)
+    {
+        queued_h264 = self->h264_head;
+        self->h264_head = queued_h264->next;
+        if (self->h264_head == 0)
+        {
+            self->h264_tail = 0;
+        }
+        if (self->h264_queue_count > 0)
+        {
+            self->h264_queue_count--;
+        }
+
+        data = queued_h264->data;
+        queued_h264->data = 0;
+        frame_width = queued_h264->width;
+        frame_height = queued_h264->height;
+        frame_format = XRDP_OHOS_FRAME_FORMAT_H264_AVC420;
+        frame_stride = (int)queued_h264->data_bytes;
+        frame_data_bytes = queued_h264->data_bytes;
+        sequence = queued_h264->sequence;
+        source_sequence = queued_h264->source_sequence;
+        capture_acquire_us = queued_h264->capture_acquire_us;
+        bridge_queue_us = queued_h264->bridge_queue_us;
+        submitter_enqueue_us = queued_h264->submitter_enqueue_us;
+        submitter_submit_us = queued_h264->submitter_submit_us;
+        submitter_copy_us = queued_h264->submitter_copy_us;
+        backend_submit_us = queued_h264->backend_submit_us;
+        backend_copy_done_us = queued_h264->backend_copy_done_us;
+        backend_pending_us = queued_h264->backend_pending_us;
+        more_pending = self->h264_head != 0 ||
+                       (self->frame_pending && self->frame_data != 0);
+        wait_obj = self->frame_wait_obj;
+        self->frame_pending = more_pending;
+        g_free(queued_h264);
+    }
+    else if (self->frame_pending && self->frame_data != 0)
     {
         data = self->frame_data;
         frame_width = self->frame_width;
@@ -485,12 +596,15 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
         self->frame_data = 0;
         self->frame_pending = 0;
         self->frame_data_bytes = 0;
+        more_pending = self->h264_head != 0;
+        wait_obj = self->frame_wait_obj;
     }
 
     ohos_unlock_frame_state();
 
     if (data == 0)
     {
+        ohos_signal_more_frames(wait_obj, more_pending);
         return 0;
     }
     if (painted != 0)
@@ -505,6 +619,7 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
             mod->server_begin_update == 0 || mod->server_end_update == 0)
     {
         g_free(data);
+        ohos_signal_more_frames(wait_obj, more_pending);
         return 0;
     }
 
@@ -564,6 +679,7 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
             ohos_frame_format_name(frame_format), frame_width, frame_height,
             (int)frame_data_bytes);
         g_free(data);
+        ohos_signal_more_frames(wait_obj, more_pending);
         return 1;
     }
 
@@ -594,6 +710,7 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     }
 
     g_free(data);
+    ohos_signal_more_frames(wait_obj, more_pending);
     return rv;
 }
 
@@ -762,6 +879,7 @@ ohos_mod_end(struct mod *mod)
         }
         ohos_unlock_frame_state();
     }
+    ohos_discard_pending_frame(self);
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: end");
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_DISCONNECT,
                                0, 0, 0, 0, 0, 0, 0);
@@ -1126,6 +1244,7 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
     }
 
     old_data = target->frame_data;
+    ohos_clear_h264_queue_locked(target);
     target->frame_data = packed;
     target->frame_width = frame->width;
     target->frame_height = frame->height;
@@ -1166,12 +1285,16 @@ xrdp_ohos_backend_submit_encoded_frame(
     const struct xrdp_ohos_encoded_frame *frame)
 {
     struct ohos_mod *target;
+    struct ohos_queued_h264_frame *queued;
     char *packed;
     char *old_data = 0;
     tintptr wait_obj = 0;
     uint64_t backend_submit_us;
     uint64_t backend_copy_done_us;
     uint64_t backend_pending_us;
+    int sequence;
+    int queue_count;
+    int waiting_for_sync;
 
     backend_submit_us = ohos_now_us();
     if (frame == 0 || frame->data == 0 || frame->bytes <= 0 ||
@@ -1191,9 +1314,34 @@ xrdp_ohos_backend_submit_encoded_frame(
     g_memcpy(packed, frame->data, frame->bytes);
     backend_copy_done_us = ohos_now_us();
 
-    if (ohos_lock_frame_state() != 0)
+    queued = (struct ohos_queued_h264_frame *)
+             g_malloc(sizeof(struct ohos_queued_h264_frame), 1);
+    if (queued == 0)
     {
         g_free(packed);
+        return XRDP_OHOS_BACKEND_STATUS_NO_MEMORY;
+    }
+    queued->data = packed;
+    queued->data_bytes = (size_t)frame->bytes;
+    queued->width = frame->width;
+    queued->height = frame->height;
+    queued->source_sequence = frame->source_sequence;
+    queued->capture_timestamp_us = frame->capture_timestamp_us;
+    queued->capture_acquire_us = frame->capture_acquire_us;
+    queued->bridge_queue_us = frame->bridge_queue_us;
+    queued->submitter_enqueue_us = frame->encoder_output_us;
+    queued->submitter_submit_us = frame->encoder_output_us;
+    queued->submitter_copy_us =
+        (backend_copy_done_us >= backend_submit_us) ?
+        (backend_copy_done_us - backend_submit_us) : 0;
+    queued->backend_submit_us = backend_submit_us;
+    queued->backend_copy_done_us = backend_copy_done_us;
+    queued->flags = frame->flags;
+    queued->next = 0;
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        ohos_free_h264_frame(queued);
         return XRDP_OHOS_BACKEND_STATUS_LOCK_FAILED;
     }
 
@@ -1201,12 +1349,57 @@ xrdp_ohos_backend_submit_encoded_frame(
     if (target == 0 || !target->connected)
     {
         ohos_unlock_frame_state();
-        g_free(packed);
+        ohos_free_h264_frame(queued);
         return XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
     }
 
+    waiting_for_sync = target->h264_waiting_for_sync &&
+                       ((frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) == 0);
+    if (waiting_for_sync)
+    {
+        target->h264_drop_count++;
+        if (target->h264_drop_count <= 5 ||
+                (target->h264_drop_count % 60) == 0)
+        {
+            LOG(LOG_LEVEL_WARNING,
+                "xrdp.ohos.h264: dropping non-sync frame while waiting for recovery source_seq=%llu dropped=%d",
+                (unsigned long long)frame->source_sequence,
+                target->h264_drop_count);
+        }
+        ohos_unlock_frame_state();
+        ohos_free_h264_frame(queued);
+        return XRDP_OHOS_BACKEND_STATUS_BACKPRESSURE;
+    }
+
+    if (target->h264_queue_count >= OHOS_H264_QUEUE_LIMIT)
+    {
+        target->h264_drop_count++;
+        target->h264_waiting_for_sync = 1;
+        if ((frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) == 0)
+        {
+            LOG(LOG_LEVEL_WARNING,
+                "xrdp.ohos.h264: queue overflow count=%d limit=%d source_seq=%llu dropped=%d; waiting for sync frame",
+                target->h264_queue_count, OHOS_H264_QUEUE_LIMIT,
+                (unsigned long long)frame->source_sequence,
+                target->h264_drop_count);
+            ohos_unlock_frame_state();
+            ohos_free_h264_frame(queued);
+            return XRDP_OHOS_BACKEND_STATUS_BACKPRESSURE;
+        }
+        ohos_clear_h264_queue_locked(target);
+        target->h264_waiting_for_sync = 0;
+    }
+    else if ((frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) != 0)
+    {
+        if (target->h264_waiting_for_sync)
+        {
+            ohos_clear_h264_queue_locked(target);
+        }
+        target->h264_waiting_for_sync = 0;
+    }
+
     old_data = target->frame_data;
-    target->frame_data = packed;
+    target->frame_data = 0;
     target->frame_width = frame->width;
     target->frame_height = frame->height;
     target->frame_format = XRDP_OHOS_FRAME_FORMAT_H264_AVC420;
@@ -1223,11 +1416,25 @@ xrdp_ohos_backend_submit_encoded_frame(
         (backend_copy_done_us - backend_submit_us) : 0;
     target->frame_backend_submit_us = backend_submit_us;
     target->frame_backend_copy_done_us = backend_copy_done_us;
-    target->frame_sequence = ++g_ohos_frame_sequence;
+    sequence = ++g_ohos_frame_sequence;
+    target->frame_sequence = sequence;
     backend_pending_us = ohos_now_us();
     target->frame_backend_pending_us = backend_pending_us;
+    queued->sequence = sequence;
+    queued->backend_pending_us = backend_pending_us;
     target->frame_pending = 1;
     ohos_store_frame_trace_locked(target);
+    if (target->h264_tail != 0)
+    {
+        target->h264_tail->next = queued;
+    }
+    else
+    {
+        target->h264_head = queued;
+    }
+    target->h264_tail = queued;
+    target->h264_queue_count++;
+    queue_count = target->h264_queue_count;
     wait_obj = target->frame_wait_obj;
     ohos_unlock_frame_state();
 
@@ -1238,6 +1445,14 @@ xrdp_ohos_backend_submit_encoded_frame(
     if (wait_obj != 0)
     {
         g_set_wait_obj(wait_obj);
+    }
+    if (sequence <= 5 || (sequence % 60) == 0 || queue_count > 1)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.h264: queued encoded frame seq=%d source_seq=%llu bytes=%d queue=%d sync=%d",
+            sequence, (unsigned long long)frame->source_sequence,
+            frame->bytes, queue_count,
+            (frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) != 0);
     }
 
     return XRDP_OHOS_BACKEND_STATUS_OK;

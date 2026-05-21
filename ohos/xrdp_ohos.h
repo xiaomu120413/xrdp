@@ -17,6 +17,7 @@ extern "C"
 #define XRDP_OHOS_BACKEND_EVENT_VERSION 2
 #define XRDP_OHOS_FRAME_MAX_DIMENSION 8192
 #define XRDP_OHOS_AUDIO_MAX_BYTES 131072
+#define XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC 0x00000001U
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -50,7 +51,8 @@ enum xrdp_ohos_backend_status
     XRDP_OHOS_BACKEND_STATUS_NO_MEMORY = -2,
     XRDP_OHOS_BACKEND_STATUS_LOCK_FAILED = -3,
     XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION = -4,
-    XRDP_OHOS_BACKEND_STATUS_UNSUPPORTED_FORMAT = -5
+    XRDP_OHOS_BACKEND_STATUS_UNSUPPORTED_FORMAT = -5,
+    XRDP_OHOS_BACKEND_STATUS_BACKPRESSURE = -6
 };
 
 enum xrdp_ohos_frame_format
@@ -115,6 +117,7 @@ struct xrdp_ohos_encoded_frame
     int width;
     int height;
     int format;
+    uint32_t flags;
     uint64_t source_sequence;
     uint64_t capture_timestamp_us;
     uint64_t capture_acquire_us;
