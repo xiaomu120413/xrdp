@@ -47,7 +47,9 @@ ohos_cliprdr_init(struct ohos_cliprdr *cliprdr, struct mod *mod,
     g_memset(cliprdr, 0, sizeof(struct ohos_cliprdr));
     cliprdr->mod = mod;
     cliprdr->channel_id = -1;
-    cliprdr->capability_flags = CB_USE_LONG_FORMAT_NAMES;
+    cliprdr->capability_flags = CB_USE_LONG_FORMAT_NAMES |
+                                 CB_STREAM_FILECLIP_ENABLED;
+    cliprdr->remote_file_fd = -1;
     cliprdr->wake_obj = wake_obj;
     cliprdr->lock = tc_mutex_create();
 
@@ -62,6 +64,7 @@ ohos_cliprdr_deinit(struct ohos_cliprdr *cliprdr)
         return;
     }
     ohos_cliprdr_pasteboard_deinit(cliprdr);
+    ohos_cliprdr_file_transfer_reset(cliprdr);
     ohos_cliprdr_channel_reset(cliprdr);
     if (cliprdr->lock != 0)
     {
@@ -84,6 +87,7 @@ ohos_cliprdr_connect(struct ohos_cliprdr *cliprdr)
     cliprdr->channel_ready = 0;
     cliprdr->requested_format = 0;
     cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    ohos_cliprdr_file_transfer_reset(cliprdr);
 
     if (cliprdr->mod->server_chansrv_in_use != 0 &&
             cliprdr->mod->server_chansrv_in_use(cliprdr->mod))
@@ -144,6 +148,7 @@ ohos_cliprdr_disconnect(struct ohos_cliprdr *cliprdr)
     cliprdr->requested_format = 0;
     cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
     cliprdr->local_change_pending = 0;
+    ohos_cliprdr_file_transfer_reset(cliprdr);
     ohos_cliprdr_channel_reset(cliprdr);
 }
 

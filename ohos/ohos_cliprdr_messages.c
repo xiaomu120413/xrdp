@@ -122,8 +122,9 @@ ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
     cliprdr->requested_format = format_id;
     cliprdr->requested_kind = request_kind;
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: requesting remote clipboard data format=%d kind=%d",
-        format_id, request_kind);
+        "xrdp.ohos.cliprdr: requesting remote clipboard data format=%d(%s) kind=%s(%d)",
+        format_id, ohos_cliprdr_format_display_name(format_id),
+        ohos_cliprdr_request_kind_name(request_kind), request_kind);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
     free_stream(s);
     return rv;
@@ -189,6 +190,7 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     int has_html;
     int has_uri;
     int has_image;
+    int has_file;
     int image_format = 0;
     int rv;
 
@@ -201,7 +203,9 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     has_html = (ohos_cliprdr_pasteboard_read_html(cliprdr, &html, 0) == 0);
     has_uri = (ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) == 0);
     has_image = ohos_cliprdr_has_local_image(cliprdr, &image_format);
-    if (!has_text && !has_html && !has_uri && !has_image && !allow_empty)
+    has_file = ohos_cliprdr_has_local_file(cliprdr);
+    if (!has_text && !has_html && !has_uri && !has_image && !has_file &&
+            !allow_empty)
     {
         return 0;
     }
@@ -250,6 +254,14 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
                                     ohos_cliprdr_format_name(image_format));
         }
     }
+    if (has_file)
+    {
+        ohos_cliprdr_out_format(s,
+                                OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR,
+                                ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR));
+        ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_FILE_CONTENTS,
+                                ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_FILE_CONTENTS));
+    }
     s_mark_end(s);
 
     rv = ohos_cliprdr_send_stream(cliprdr, s);
@@ -257,8 +269,10 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     {
         cliprdr->local_format_lists_sent++;
         LOG(LOG_LEVEL_INFO,
-            "xrdp.ohos.cliprdr: sent local formats text=%d html=%d uri=%d image=%d reason=%s",
-            has_text, has_html, has_uri, has_image, reason == 0 ? "" : reason);
+            "xrdp.ohos.cliprdr: sent local formats text=%d html=%d uri=%d image=%d image-format=%d(%s) file=%d reason=%s",
+            has_text, has_html, has_uri, has_image, image_format,
+            ohos_cliprdr_format_display_name(image_format),
+            has_file, reason == 0 ? "" : reason);
     }
     else
     {

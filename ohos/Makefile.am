@@ -27,6 +27,9 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_bitmap.c \
   ohos_cliprdr_channel.c \
   ohos_cliprdr.c \
+  ohos_cliprdr_file.c \
+  ohos_cliprdr_file_pasteboard.c \
+  ohos_cliprdr_file_remote.c \
   ohos_cliprdr_formats.c \
   ohos_cliprdr_image.c \
   ohos_cliprdr_image_cache.c \

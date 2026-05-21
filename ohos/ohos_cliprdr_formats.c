@@ -12,6 +12,7 @@
 #include "os_calls.h"
 #include "parse.h"
 #include "string_calls.h"
+#include "xrdp_constants.h"
 
 #include <ctype.h>
 
@@ -22,6 +23,9 @@ static const char g_image_bmp_format_name[] = "image/bmp";
 static const char g_image_png_format_name[] = "image/png";
 static const char g_image_jpeg_format_name[] = "image/jpeg";
 static const char g_image_webp_format_name[] = "image/webp";
+static const char g_file_group_descriptor_format_name[] =
+    "FileGroupDescriptorW";
+static const char g_file_contents_format_name[] = "FileContents";
 
 int
 OH_FileUri_GetPathFromUri(const char *uri, unsigned int length, char **result);
@@ -99,8 +103,71 @@ ohos_cliprdr_format_name(int format_id)
             return g_image_jpeg_format_name;
         case OHOS_CLIPRDR_FORMAT_IMAGE_WEBP:
             return g_image_webp_format_name;
+        case OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR:
+            return g_file_group_descriptor_format_name;
+        case OHOS_CLIPRDR_FORMAT_FILE_CONTENTS:
+            return g_file_contents_format_name;
         default:
             return 0;
+    }
+}
+
+const char *
+ohos_cliprdr_format_display_name(int format_id)
+{
+    const char *name;
+
+    name = ohos_cliprdr_format_name(format_id);
+    if (name != 0)
+    {
+        return name;
+    }
+    switch (format_id)
+    {
+        case CF_TEXT:
+            return "CF_TEXT";
+        case CF_OEMTEXT:
+            return "CF_OEMTEXT";
+        case CF_DIB:
+            return "CF_DIB";
+        case CF_UNICODETEXT:
+            return "CF_UNICODETEXT";
+        case CF_DIBV5:
+            return "CF_DIBV5";
+        default:
+            return "unknown";
+    }
+}
+
+const char *
+ohos_cliprdr_request_kind_name(int request_kind)
+{
+    switch (request_kind)
+    {
+        case OHOS_CLIPRDR_REQUEST_NONE:
+            return "none";
+        case OHOS_CLIPRDR_REQUEST_TEXT:
+            return "text";
+        case OHOS_CLIPRDR_REQUEST_HTML:
+            return "html";
+        case OHOS_CLIPRDR_REQUEST_URIW:
+            return "uriw";
+        case OHOS_CLIPRDR_REQUEST_URI_LIST:
+            return "uri-list";
+        case OHOS_CLIPRDR_REQUEST_DIB:
+            return "dib";
+        case OHOS_CLIPRDR_REQUEST_IMAGE_BMP:
+            return "image/bmp";
+        case OHOS_CLIPRDR_REQUEST_IMAGE_PNG:
+            return "image/png";
+        case OHOS_CLIPRDR_REQUEST_IMAGE_JPEG:
+            return "image/jpeg";
+        case OHOS_CLIPRDR_REQUEST_IMAGE_WEBP:
+            return "image/webp";
+        case OHOS_CLIPRDR_REQUEST_FILE_GROUP_DESCRIPTOR:
+            return "file-group-descriptor";
+        default:
+            return "unknown";
     }
 }
 

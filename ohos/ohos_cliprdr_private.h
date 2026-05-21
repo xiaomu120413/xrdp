@@ -20,6 +20,9 @@ typedef struct OH_UdmfData OH_UdmfData;
 #define OHOS_CLIPRDR_FORMAT_IMAGE_PNG 0xC005
 #define OHOS_CLIPRDR_FORMAT_IMAGE_JPEG 0xC006
 #define OHOS_CLIPRDR_FORMAT_IMAGE_WEBP 0xC007
+#define OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR 0xC008
+#define OHOS_CLIPRDR_FORMAT_FILE_CONTENTS 0xC009
+#define OHOS_CLIPRDR_MAX_FILE_CHUNK_BYTES (1024 * 1024)
 
 #ifndef CF_DIBV5
 #define CF_DIBV5 17
@@ -36,7 +39,8 @@ enum ohos_cliprdr_request_kind
     OHOS_CLIPRDR_REQUEST_IMAGE_BMP,
     OHOS_CLIPRDR_REQUEST_IMAGE_PNG,
     OHOS_CLIPRDR_REQUEST_IMAGE_JPEG,
-    OHOS_CLIPRDR_REQUEST_IMAGE_WEBP
+    OHOS_CLIPRDR_REQUEST_IMAGE_WEBP,
+    OHOS_CLIPRDR_REQUEST_FILE_GROUP_DESCRIPTOR
 };
 
 int
@@ -99,6 +103,12 @@ ohos_cliprdr_is_uri_text(const char *value);
 
 const char *
 ohos_cliprdr_format_name(int format_id);
+
+const char *
+ohos_cliprdr_format_display_name(int format_id);
+
+const char *
+ohos_cliprdr_request_kind_name(int request_kind);
 
 int
 ohos_cliprdr_image_format_from_signature(const char *data, int bytes);
@@ -179,6 +189,33 @@ int
 ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
                                 int request_kind, const char *data,
                                 int bytes);
+
+int
+ohos_cliprdr_has_local_file(struct ohos_cliprdr *cliprdr);
+
+int
+ohos_cliprdr_send_local_file_descriptor(struct ohos_cliprdr *cliprdr);
+
+int
+ohos_cliprdr_process_local_filecontents_request(struct ohos_cliprdr *cliprdr,
+                                                struct stream *s,
+                                                int data_len);
+
+int
+ohos_cliprdr_process_remote_file_descriptor(struct ohos_cliprdr *cliprdr,
+                                            const char *data, int bytes);
+
+int
+ohos_cliprdr_process_remote_filecontents_response(struct ohos_cliprdr *cliprdr,
+                                                  int msg_flags,
+                                                  struct stream *s,
+                                                  int data_len);
+
+int
+ohos_cliprdr_write_remote_file_uris(struct ohos_cliprdr *cliprdr);
+
+void
+ohos_cliprdr_file_transfer_reset(struct ohos_cliprdr *cliprdr);
 
 void
 ohos_cliprdr_channel_reset(struct ohos_cliprdr *cliprdr);

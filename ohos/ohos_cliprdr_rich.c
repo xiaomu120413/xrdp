@@ -46,6 +46,9 @@ ohos_cliprdr_pasteboard_read_html(struct ohos_cliprdr *cliprdr,
     data = ohos_cliprdr_pasteboard_get_data(cliprdr, "read html", &status);
     if (status != ERR_OK || data == 0)
     {
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.cliprdr: Pasteboard read html failed status=%d(%s)",
+            status, ohos_cliprdr_pasteboard_status_name(status));
         return 1;
     }
 
@@ -72,6 +75,10 @@ ohos_cliprdr_pasteboard_read_html(struct ohos_cliprdr *cliprdr,
         {
             OH_UdmfData_Destroy(data);
             cliprdr->pasteboard_reads++;
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.cliprdr: Pasteboard read html source=primary html-bytes=%d plain-bytes=%d",
+                (int)g_strlen(*html),
+                plain == 0 || *plain == 0 ? 0 : (int)g_strlen(*plain));
             return 0;
         }
     }
@@ -112,11 +119,18 @@ ohos_cliprdr_pasteboard_read_html(struct ohos_cliprdr *cliprdr,
         {
             OH_UdmfData_Destroy(data);
             cliprdr->pasteboard_reads++;
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.cliprdr: Pasteboard read html source=record index=%d html-bytes=%d plain-bytes=%d",
+                index, (int)g_strlen(*html),
+                plain == 0 || *plain == 0 ? 0 : (int)g_strlen(*plain));
             return 0;
         }
     }
 
     OH_UdmfData_Destroy(data);
+    LOG(LOG_LEVEL_DEBUG,
+        "xrdp.ohos.cliprdr: Pasteboard read html found no html records=%d",
+        record_count);
     return 1;
 }
 
@@ -198,12 +212,18 @@ ohos_cliprdr_pasteboard_read_uri(struct ohos_cliprdr *cliprdr, char **uri)
     data = ohos_cliprdr_pasteboard_get_data(cliprdr, "read uri", &status);
     if (status != ERR_OK || data == 0)
     {
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.cliprdr: Pasteboard read uri failed status=%d(%s)",
+            status, ohos_cliprdr_pasteboard_status_name(status));
         return 1;
     }
     if (ohos_cliprdr_read_uri_from_data(data, uri) == 0)
     {
         OH_UdmfData_Destroy(data);
         cliprdr->pasteboard_reads++;
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.cliprdr: Pasteboard read uri source=udmf bytes=%d",
+            (int)g_strlen(*uri));
         return 0;
     }
     OH_UdmfData_Destroy(data);
@@ -211,10 +231,15 @@ ohos_cliprdr_pasteboard_read_uri(struct ohos_cliprdr *cliprdr, char **uri)
     if (ohos_cliprdr_pasteboard_read_plain_text(cliprdr, uri) == 0 &&
             ohos_cliprdr_is_uri_text(*uri))
     {
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.cliprdr: Pasteboard read uri source=plain-text bytes=%d",
+            (int)g_strlen(*uri));
         return 0;
     }
     g_free(*uri);
     *uri = 0;
+    LOG(LOG_LEVEL_DEBUG,
+        "xrdp.ohos.cliprdr: Pasteboard read uri found no uri data");
     return 1;
 }
 
@@ -271,8 +296,9 @@ ohos_cliprdr_pasteboard_write_html(struct ohos_cliprdr *cliprdr,
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: Pasteboard SetData html bytes=%d status=%d(%s)",
-        (int)g_strlen(html), rc, ohos_cliprdr_pasteboard_status_name(rc));
+        "xrdp.ohos.cliprdr: Pasteboard SetData html record=html+plain html-bytes=%d plain-bytes=%d status=%d(%s)",
+        (int)g_strlen(html), plain_value == 0 ? 0 : (int)g_strlen(plain_value),
+        rc, ohos_cliprdr_pasteboard_status_name(rc));
     if (rc != ERR_OK)
     {
         ohos_cliprdr_pasteboard_cancel_remote_write(cliprdr);
@@ -377,7 +403,8 @@ ohos_cliprdr_pasteboard_write_uri(struct ohos_cliprdr *cliprdr, const char *uri)
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: Pasteboard SetData uri bytes=%d status=%d(%s)",
+        "xrdp.ohos.cliprdr: Pasteboard SetData uri record=%s+plain bytes=%d status=%d(%s)",
+        hyperlink != 0 ? "hyperlink" : "fileUri",
         (int)g_strlen(uri), rc, ohos_cliprdr_pasteboard_status_name(rc));
     if (rc != ERR_OK)
     {

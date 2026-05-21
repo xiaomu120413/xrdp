@@ -25,6 +25,7 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
     int image_format = 0;
     int image_kind = OHOS_CLIPRDR_REQUEST_NONE;
     int image_priority = 0;
+    int format_count = 0;
     int format_id;
 
     cliprdr->remote_html_format = 0;
@@ -34,6 +35,9 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
     cliprdr->remote_image_png_format = 0;
     cliprdr->remote_image_jpeg_format = 0;
     cliprdr->remote_image_webp_format = 0;
+    cliprdr->remote_file_group_descriptor_format = 0;
+    cliprdr->remote_file_contents_format = 0;
+    ohos_cliprdr_file_transfer_reset(cliprdr);
 
     while (s_check_rem(s, 4))
     {
@@ -41,10 +45,13 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
 
         in_uint32_le(s, format_id);
         name = ohos_cliprdr_read_format_name(s, msg_flags);
+        format_count++;
 
         LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.cliprdr: remote format id=%d name=%s",
-            format_id, name == 0 ? "" : name);
+            "xrdp.ohos.cliprdr: remote format candidate index=%d id=%d canonical=%s name=%s",
+            format_count, format_id,
+            ohos_cliprdr_format_display_name(format_id),
+            name == 0 ? "" : name);
 
         if (name != 0 &&
                 (ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_HTML) ||
@@ -104,6 +111,18 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
                 image_priority = 90;
             }
         }
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name,
+                                      OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR))
+        {
+            cliprdr->remote_file_group_descriptor_format = format_id;
+        }
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name,
+                                      OHOS_CLIPRDR_FORMAT_FILE_CONTENTS))
+        {
+            cliprdr->remote_file_contents_format = format_id;
+        }
         else if (format_id == CF_DIB && image_priority < 80)
         {
             image_format = format_id;
@@ -144,11 +163,28 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
         requested = cliprdr->remote_uri_list_format;
         requested_kind = OHOS_CLIPRDR_REQUEST_URI_LIST;
     }
+    else if (cliprdr->remote_file_group_descriptor_format != 0 &&
+             cliprdr->remote_file_contents_format != 0)
+    {
+        requested = cliprdr->remote_file_group_descriptor_format;
+        requested_kind = OHOS_CLIPRDR_REQUEST_FILE_GROUP_DESCRIPTOR;
+    }
     else if (text_format != 0)
     {
         requested = text_format;
         requested_kind = OHOS_CLIPRDR_REQUEST_TEXT;
     }
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: remote format summary count=%d text=%d html=%d uriw=%d uri-list=%d image-dib=%d image-bmp=%d image-png=%d image-jpeg=%d image-webp=%d file-desc=%d file-contents=%d selected=%d(%s) kind=%s(%d)",
+        format_count, text_format, cliprdr->remote_html_format,
+        cliprdr->remote_uriw_format, cliprdr->remote_uri_list_format,
+        image_format == CF_DIB ? CF_DIB : 0,
+        cliprdr->remote_image_bmp_format, cliprdr->remote_image_png_format,
+        cliprdr->remote_image_jpeg_format, cliprdr->remote_image_webp_format,
+        cliprdr->remote_file_group_descriptor_format,
+        cliprdr->remote_file_contents_format,
+        requested, ohos_cliprdr_format_display_name(requested),
+        ohos_cliprdr_request_kind_name(requested_kind), requested_kind);
     if (requested != 0)
     {
         return ohos_cliprdr_send_format_data_request(cliprdr, requested,
@@ -211,6 +247,10 @@ ohos_cliprdr_process_format_data_request(struct ohos_cliprdr *cliprdr,
     {
         ok = ohos_cliprdr_read_local_image(cliprdr, format_id, &data,
                                            &bytes) == 0;
+    }
+    else if (format_id == OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR)
+    {
+        return ohos_cliprdr_send_local_file_descriptor(cliprdr);
     }
     else if (format_id == CF_UNICODETEXT ||
              format_id == CF_TEXT ||
@@ -281,6 +321,11 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     {
         return 1;
     }
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: remote data response format=%d(%s) kind=%s(%d) bytes=%d flags=0x%08x",
+        format_id, ohos_cliprdr_format_display_name(format_id),
+        ohos_cliprdr_request_kind_name(request_kind), request_kind,
+        data_len, msg_flags);
 
     if (request_kind == OHOS_CLIPRDR_REQUEST_HTML)
     {
@@ -289,6 +334,9 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
         {
             rv = ohos_cliprdr_pasteboard_write_html(cliprdr, html, 0);
         }
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: remote html response html-bytes=%d write-rv=%d",
+            html == 0 ? 0 : (int)g_strlen(html), rv);
         g_free(html);
         return rv;
     }
@@ -299,6 +347,9 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
         {
             rv = ohos_cliprdr_pasteboard_write_uri(cliprdr, uri);
         }
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: remote uriw response uri-bytes=%d write-rv=%d",
+            uri == 0 ? 0 : (int)g_strlen(uri), rv);
         g_free(uri);
         return rv;
     }
@@ -313,6 +364,9 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
         {
             rv = ohos_cliprdr_pasteboard_write_uri(cliprdr, uri);
         }
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: remote uri-list response uri-bytes=%d write-rv=%d",
+            uri == 0 ? 0 : (int)g_strlen(uri), rv);
         g_free(uri);
         return rv;
     }
@@ -324,10 +378,22 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     {
         rv = ohos_cliprdr_write_remote_image(cliprdr, request_kind,
                                              s->p, data_len);
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: remote image response kind=%s bytes=%d write-rv=%d",
+            ohos_cliprdr_request_kind_name(request_kind), data_len, rv);
         if (rv == 0)
         {
             cliprdr->remote_responses_received++;
         }
+        return rv;
+    }
+    if (request_kind == OHOS_CLIPRDR_REQUEST_FILE_GROUP_DESCRIPTOR)
+    {
+        rv = ohos_cliprdr_process_remote_file_descriptor(cliprdr, s->p,
+                                                         data_len);
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: remote FileGroupDescriptorW response bytes=%d rv=%d",
+            data_len, rv);
         return rv;
     }
 
@@ -356,6 +422,9 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     }
 
     rv = ohos_cliprdr_pasteboard_write_plain_text(cliprdr, text);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: remote text response text-bytes=%d write-rv=%d",
+        (int)g_strlen(text), rv);
     if (rv == 0)
     {
         cliprdr->remote_responses_received++;
@@ -462,6 +531,16 @@ ohos_cliprdr_process_pdu(struct ohos_cliprdr *cliprdr, struct stream *s)
             rv = ohos_cliprdr_process_format_data_response(cliprdr,
                                                            msg_flags, s,
                                                            data_len);
+            break;
+        case CB_FILECONTENTS_REQUEST:
+            rv = ohos_cliprdr_process_local_filecontents_request(cliprdr, s,
+                                                                 data_len);
+            break;
+        case CB_FILECONTENTS_RESPONSE:
+            rv = ohos_cliprdr_process_remote_filecontents_response(cliprdr,
+                                                                   msg_flags,
+                                                                   s,
+                                                                   data_len);
             break;
         case CB_TEMP_DIRECTORY:
         case CB_LOCK_CLIPDATA:

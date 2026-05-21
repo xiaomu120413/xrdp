@@ -123,6 +123,9 @@ ohos_cliprdr_pasteboard_read_plain_text(struct ohos_cliprdr *cliprdr,
         {
             OH_UdmfData_Destroy(data);
             cliprdr->pasteboard_reads++;
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.cliprdr: Pasteboard read text source=primary bytes=%d",
+                (int)g_strlen(*text));
             return 0;
         }
     }
@@ -157,11 +160,17 @@ ohos_cliprdr_pasteboard_read_plain_text(struct ohos_cliprdr *cliprdr,
         {
             OH_UdmfData_Destroy(data);
             cliprdr->pasteboard_reads++;
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.cliprdr: Pasteboard read text source=record index=%d bytes=%d",
+                index, (int)g_strlen(*text));
             return 0;
         }
     }
 
     OH_UdmfData_Destroy(data);
+    LOG(LOG_LEVEL_DEBUG,
+        "xrdp.ohos.cliprdr: Pasteboard read text found no plain text records=%d",
+        record_count);
     return 1;
 }
 
@@ -251,7 +260,7 @@ ohos_cliprdr_pasteboard_write_plain_text(struct ohos_cliprdr *cliprdr,
 
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: Pasteboard SetData text bytes=%d status=%d(%s)",
+        "xrdp.ohos.cliprdr: Pasteboard SetData text record=plain bytes=%d status=%d(%s)",
         text == 0 ? 0 : (int)g_strlen(text),
         rc, ohos_cliprdr_pasteboard_status_name(rc));
     if (rc != ERR_OK)
@@ -346,7 +355,7 @@ ohos_cliprdr_on_pasteboard_changed(void *context, Pasteboard_NotifyType type)
     }
     ohos_cliprdr_unlock(cliprdr);
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard changed suppress=%d", suppress);
     if (!suppress && cliprdr->wake_obj != 0)
     {

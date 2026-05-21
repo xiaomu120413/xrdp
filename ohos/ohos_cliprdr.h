@@ -8,6 +8,14 @@ struct stream;
 typedef struct OH_Pasteboard OH_Pasteboard;
 typedef struct OH_PasteboardObserver OH_PasteboardObserver;
 
+struct ohos_cliprdr_remote_file
+{
+    char *name;
+    char *path;
+    char *uri;
+    int size;
+};
+
 struct ohos_cliprdr
 {
     struct mod *mod;
@@ -25,6 +33,15 @@ struct ohos_cliprdr
     int remote_image_png_format;
     int remote_image_jpeg_format;
     int remote_image_webp_format;
+    int remote_file_group_descriptor_format;
+    int remote_file_contents_format;
+    struct ohos_cliprdr_remote_file *remote_files;
+    int remote_file_count;
+    int remote_file_index;
+    int remote_file_offset;
+    int remote_file_stream_id;
+    int remote_file_pending;
+    int remote_file_fd;
     struct stream *dechunker_s;
     OH_Pasteboard *pasteboard;
     OH_PasteboardObserver *observer;
