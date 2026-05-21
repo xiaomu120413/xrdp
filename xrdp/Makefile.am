@@ -1,15 +1,30 @@
 EXTRA_DIST = \
   czech.txt \
   rdp-scan-codes.txt \
+  xrdp-ohos.ini.in \
   xrdpwin.c
 
+if XRDP_OHOS
+XRDP_RUNTIME_CFG_PATH = /data/storage/el2/base/files/xrdp/config
+XRDP_RUNTIME_SHARE_PATH = /data/storage/el2/base/files/xrdp/share
+XRDP_RUNTIME_PID_PATH = /data/storage/el2/base/files/xrdp/run
+XRDP_RUNTIME_MODULE_PATH = /data/storage/el2/base/files/xrdp/lib
+XRDP_RUNTIME_SOCKET_ROOT_PATH = /data/storage/el2/base/files/xrdp/run/xrdp
+else
+XRDP_RUNTIME_CFG_PATH = ${sysconfdir}/${sysconfsubdir}
+XRDP_RUNTIME_SHARE_PATH = ${datadir}/xrdp
+XRDP_RUNTIME_PID_PATH = ${localstatedir}/run
+XRDP_RUNTIME_MODULE_PATH = ${moduledir}
+XRDP_RUNTIME_SOCKET_ROOT_PATH = ${socketdir}
+endif
+
 AM_CPPFLAGS = \
-  -DXRDP_CFG_PATH=\"${sysconfdir}/${sysconfsubdir}\" \
+  -DXRDP_CFG_PATH=\"$(XRDP_RUNTIME_CFG_PATH)\" \
   -DXRDP_SBIN_PATH=\"${sbindir}\" \
-  -DXRDP_SHARE_PATH=\"${datadir}/xrdp\" \
-  -DXRDP_PID_PATH=\"${localstatedir}/run\" \
-  -DXRDP_MODULE_PATH=\"${moduledir}\" \
-  -DXRDP_SOCKET_ROOT_PATH=\"${socketdir}\" \
+  -DXRDP_SHARE_PATH=\"$(XRDP_RUNTIME_SHARE_PATH)\" \
+  -DXRDP_PID_PATH=\"$(XRDP_RUNTIME_PID_PATH)\" \
+  -DXRDP_MODULE_PATH=\"$(XRDP_RUNTIME_MODULE_PATH)\" \
+  -DXRDP_SOCKET_ROOT_PATH=\"$(XRDP_RUNTIME_SOCKET_ROOT_PATH)\" \
   -I$(top_builddir) \
   -I$(top_srcdir)/common \
   -I$(top_srcdir)/libipm \
@@ -55,6 +70,11 @@ endif
 sbin_PROGRAMS = \
   xrdp
 
+if XRDP_OHOS
+lib_LTLIBRARIES = \
+  libxrdpserver.la
+endif
+
 xrdp_SOURCES = \
   funcs.c \
   lang.c \
@@ -93,12 +113,37 @@ xrdp_LDADD = \
   $(IMLIB2_LIBS) \
   $(XRDP_EXTRA_LIBS)
 
+if XRDP_OHOS
+libxrdpserver_la_SOURCES = \
+  $(xrdp_SOURCES)
+
+libxrdpserver_la_CPPFLAGS = \
+  $(AM_CPPFLAGS) \
+  -DXRDP_EMBEDDED_LIBRARY
+
+libxrdpserver_la_LIBADD = \
+  $(xrdp_LDADD)
+
+libxrdpserver_la_LDFLAGS = \
+  -avoid-version \
+  -no-undefined \
+  -Wl,-rpath,'$$ORIGIN' \
+  -Wl,-rpath,'$$ORIGIN/../lib' \
+  -Wl,-rpath,'$$ORIGIN/..'
+endif
+
 xrdpsysconfdir=$(sysconfdir)/$(sysconfsubdir)
 
 if MACOS
 lib_extension = dylib
 else
 lib_extension = so
+endif
+
+if XRDP_OHOS
+XRDP_INI_TEMPLATE = xrdp-ohos.ini.in
+else
+XRDP_INI_TEMPLATE = xrdp.ini.in
 endif
 
 SUBST_VARS = sed \
@@ -111,6 +156,9 @@ subst_verbose_0 = @echo "  SUBST    $@";
 SUFFIXES = .in
 .in:
 	$(subst_verbose)$(SUBST_VARS) $< > $@
+
+xrdp.ini: $(srcdir)/$(XRDP_INI_TEMPLATE)
+	$(subst_verbose)$(SUBST_VARS) $(srcdir)/$(XRDP_INI_TEMPLATE) > $@
 
 dist_xrdpsysconf_DATA = \
   gfx.toml \

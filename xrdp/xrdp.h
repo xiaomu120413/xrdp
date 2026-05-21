@@ -84,6 +84,11 @@ tbus
 g_get_sync_event(void);
 void
 g_process_waiting_function(void);
+const char *
+xrdp_get_runtime_path(const char *env_name, const char *fallback);
+void
+xrdp_make_runtime_path(char *out, int out_len, const char *env_name,
+                       const char *fallback, const char *name);
 
 /* xrdp_cache.c */
 struct xrdp_cache *

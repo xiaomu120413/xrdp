@@ -174,16 +174,21 @@ xrdp_font_create(struct xrdp_wm *wm, unsigned int dpi)
     }
     else
     {
-        g_snprintf(file_path_buff, sizeof(file_path_buff),
-                   XRDP_SHARE_PATH "/%s",
-                   font_name);
+        xrdp_make_runtime_path(file_path_buff, sizeof(file_path_buff),
+                               "XRDP_SHARE_PATH", XRDP_SHARE_PATH,
+                               font_name);
         file_path = file_path_buff;
     }
 
     if (!g_file_exist(file_path))
     {
         /* Try to fall back to the default */
-        const char *default_file_path = XRDP_SHARE_PATH "/" DEFAULT_FONT_NAME;
+        char default_file_path_buff[256];
+        const char *default_file_path = default_file_path_buff;
+        xrdp_make_runtime_path(default_file_path_buff,
+                               sizeof(default_file_path_buff),
+                               "XRDP_SHARE_PATH", XRDP_SHARE_PATH,
+                               DEFAULT_FONT_NAME);
         if (g_file_exist(default_file_path))
         {
             LOG(LOG_LEVEL_WARNING,

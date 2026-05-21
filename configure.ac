@@ -78,6 +78,14 @@ if test "x$with_systemdsystemunitdir" != xno; then
 fi
 AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != xno ])
 
+AC_ARG_ENABLE(ohos, AS_HELP_STRING([--enable-ohos],
+              [Build a minimal HarmonyOS server front end without Linux/X11 session modules (default: no)]),
+              [], [enable_ohos=no])
+AM_CONDITIONAL(XRDP_OHOS, [test x$enable_ohos = xyes])
+if test "x$enable_ohos" = "xyes"; then
+  AC_DEFINE([XRDP_OHOS], 1, [Build a minimal HarmonyOS server front end])
+fi
+
 AC_ARG_ENABLE(tests,
               AS_HELP_STRING([--enable-tests],
               [Ensure dependencies for the tests are installed]),
@@ -540,30 +548,40 @@ else
 fi
 fi
 
-AC_PATH_XTRA
-if test "x$no_x" == "xyes"; then
-  AC_MSG_ERROR([please install libx11-dev or libX11-devel])
-fi
+if test "x$enable_ohos" != "xyes"
+then
+  AC_PATH_XTRA
+  if test "x$no_x" == "xyes"; then
+    AC_MSG_ERROR([please install libx11-dev or libX11-devel])
+  fi
 
-save_CFLAGS="$CFLAGS"
-CFLAGS="$CFLAGS $X_CFLAGS"
+  save_CFLAGS="$CFLAGS"
+  CFLAGS="$CFLAGS $X_CFLAGS"
 
-# checking for Xfixes
-AC_CHECK_HEADER([X11/extensions/Xfixes.h], [],
-  [AC_MSG_ERROR([please install libxfixes-dev or libXfixes-devel])],
-  [#include <X11/Xlib.h>])
+  # checking for Xfixes
+  AC_CHECK_HEADER([X11/extensions/Xfixes.h], [],
+    [AC_MSG_ERROR([please install libxfixes-dev or libXfixes-devel])],
+    [#include <X11/Xlib.h>])
 
-# checking for Xrandr
-AC_CHECK_HEADER([X11/extensions/Xrandr.h], [],
-  [AC_MSG_ERROR([please install libxrandr-dev or libXrandr-devel])],
-  [#include <X11/Xlib.h>])
+  # checking for Xrandr
+  AC_CHECK_HEADER([X11/extensions/Xrandr.h], [],
+    [AC_MSG_ERROR([please install libxrandr-dev or libXrandr-devel])],
+    [#include <X11/Xlib.h>])
 
-# checking for XKB
-AC_CHECK_HEADER([X11/extensions/XKBrules.h], [],
-  [AC_MSG_ERROR([please install libxkbfile-dev or libxkbfile-devel])],
-  [#include <X11/Xlib.h>
+  # checking for XKB
+  AC_CHECK_HEADER([X11/extensions/XKBrules.h], [],
+    [AC_MSG_ERROR([please install libxkbfile-dev or libxkbfile-devel])],
+    [#include <X11/Xlib.h>
 #include <X11/XKBlib.h>
 #include <stdio.h>])
+
+  CFLAGS="$save_CFLAGS"
+else
+  X_CFLAGS=
+  X_LIBS=
+  X_PRE_LIBS=
+  X_EXTRA_LIBS=
+fi
 
 if test "x$enable_utmp" = "xyes"
 then
@@ -573,8 +591,6 @@ then
     AXRDP_CHECK_UTMPX_MEMBER_EXISTS([ut_host], [HAVE_UTMPX_UT_HOST])
     AXRDP_CHECK_UTMPX_MEMBER_EXISTS([ut_exit], [HAVE_UTMPX_UT_EXIT])
 fi
-
-CFLAGS="$save_CFLAGS"
 
 # perform unit tests if libcheck and libmocka found
 perform_unit_tests=yes; # Assume packages will be found
@@ -650,6 +666,7 @@ AC_CONFIG_FILES([
   Makefile
   mc/Makefile
   neutrinordp/Makefile
+  ohos/Makefile
   pkgconfig/Makefile
   pkgconfig/xrdp.pc
   pkgconfig/xrdp-uninstalled.pc
@@ -685,6 +702,7 @@ AC_OUTPUT
 echo ""
 echo "xrdp will be compiled with:"
 echo ""
+echo "  ohos                            $enable_ohos"
 echo "  mp3lame                         $enable_mp3lame"
 echo "  opus                            $enable_opus"
 echo "  fdkaac                          $enable_fdkaac"

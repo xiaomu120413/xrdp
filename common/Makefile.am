@@ -24,12 +24,24 @@ include_HEADERS = \
   xrdp_scancode_defs.h \
   xrdp_sockets.h
 
+if XRDP_OHOS
+XRDP_RUNTIME_CFG_PATH = /data/storage/el2/base/files/xrdp/config
+XRDP_RUNTIME_SHARE_PATH = /data/storage/el2/base/files/xrdp/share
+XRDP_RUNTIME_PID_PATH = /data/storage/el2/base/files/xrdp/run
+XRDP_RUNTIME_LOG_PATH = /data/storage/el2/base/files/xrdp/log
+else
+XRDP_RUNTIME_CFG_PATH = ${sysconfdir}/${sysconfsubdir}
+XRDP_RUNTIME_SHARE_PATH = ${datadir}/xrdp
+XRDP_RUNTIME_PID_PATH = ${localstatedir}/run
+XRDP_RUNTIME_LOG_PATH = ${localstatedir}/log
+endif
+
 AM_CPPFLAGS = \
-  -DXRDP_CFG_PATH=\"${sysconfdir}/${sysconfsubdir}\" \
+  -DXRDP_CFG_PATH=\"$(XRDP_RUNTIME_CFG_PATH)\" \
   -DXRDP_SBIN_PATH=\"${sbindir}\" \
-  -DXRDP_SHARE_PATH=\"${datadir}/xrdp\" \
-  -DXRDP_PID_PATH=\"${localstatedir}/run\" \
-  -DXRDP_LOG_PATH=\"${localstatedir}/log\"
+  -DXRDP_SHARE_PATH=\"$(XRDP_RUNTIME_SHARE_PATH)\" \
+  -DXRDP_PID_PATH=\"$(XRDP_RUNTIME_PID_PATH)\" \
+  -DXRDP_LOG_PATH=\"$(XRDP_RUNTIME_LOG_PATH)\"
 
 if XRDP_NVENC
 AM_CPPFLAGS += -DXRDP_NVENC

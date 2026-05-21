@@ -314,8 +314,11 @@ get_keymaps(int keylayout, struct xrdp_keymap *keymap)
     for (i = 0; i < layout_count; ++i)
     {
         // Convert key layout to a filename
-        g_snprintf(filename, sizeof(filename),
-                   XRDP_CFG_PATH "/km-%08x.toml", layout_list[i]);
+        char keymap_name[64];
+        g_snprintf(keymap_name, sizeof(keymap_name),
+                   "km-%08x.toml", layout_list[i]);
+        xrdp_make_runtime_path(filename, sizeof(filename), "XRDP_CFG_PATH",
+                               XRDP_CFG_PATH, keymap_name);
 
         if (km_load_file(filename, keymap) == 0)
         {
@@ -416,8 +419,11 @@ keylayout_supports_caps_lock(int keylayout)
     char filename[256];
     struct km_general general;
 
-    g_snprintf(filename, sizeof(filename),
-               XRDP_CFG_PATH "/km-%08x.toml", keylayout);
+    char keymap_name[64];
+    g_snprintf(keymap_name, sizeof(keymap_name),
+               "km-%08x.toml", keylayout);
+    xrdp_make_runtime_path(filename, sizeof(filename), "XRDP_CFG_PATH",
+                           XRDP_CFG_PATH, keymap_name);
 
     (void)km_load_file_general(filename, 1, &general);
 
@@ -807,7 +813,7 @@ void
 xrdp_init_xkb_layout(struct xrdp_client_info *client_info)
 {
     FILE *fp;
-    const char *keyboard_cfg_file = XRDP_CFG_PATH "/xrdp_keyboard.toml";
+    char keyboard_cfg_file[256];
 
     const struct xrdp_keyboard_overrides *ko =
             &client_info->xrdp_keyboard_overrides;
@@ -817,6 +823,10 @@ xrdp_init_xkb_layout(struct xrdp_client_info *client_info)
         " keylayout:[0x%08X]",
         client_info->keyboard_type, client_info->keyboard_subtype,
         client_info->keylayout);
+
+    xrdp_make_runtime_path(keyboard_cfg_file, sizeof(keyboard_cfg_file),
+                           "XRDP_CFG_PATH", XRDP_CFG_PATH,
+                           "xrdp_keyboard.toml");
 
     if (ko->type != -1)
     {

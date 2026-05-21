@@ -52,6 +52,20 @@ else
 ACCELDIR =
 endif
 
+if XRDP_OHOS
+# This is the minimum server-front-end build for HarmonyOS. X11 and
+# Linux session modules are intentionally excluded.
+SUBDIRS = \
+  third_party \
+  third_party/tomlc99 \
+  common \
+  libipm \
+  libxrdp \
+  $(PAINTERDIR) \
+  ohos \
+  xrdp \
+  pkgconfig
+else
 # This should not be dictionary order but build order
 SUBDIRS = \
   third_party \
@@ -79,6 +93,7 @@ SUBDIRS = \
   tests \
   tools \
   $(ACCELDIR)
+endif
 
 distclean-local:
 	-rm -f xrdp_configure_options.h

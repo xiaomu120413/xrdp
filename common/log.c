@@ -326,8 +326,14 @@ internal_config_read_logging(int file,
             {
                 if (lc->log_file[0] != '/' && g_strcmp(lc->log_file, "<stdout>") != 0)
                 {
+                    const char *log_path;
                     temp_buf = (char *)g_malloc(512, 0);
-                    g_snprintf(temp_buf, 511, "%s/%s", XRDP_LOG_PATH, lc->log_file);
+                    log_path = g_getenv("XRDP_LOG_PATH");
+                    if (log_path == NULL || log_path[0] == '\0')
+                    {
+                        log_path = XRDP_LOG_PATH;
+                    }
+                    g_snprintf(temp_buf, 511, "%s/%s", log_path, lc->log_file);
                     g_free(lc->log_file);
                     lc->log_file = temp_buf;
                 }
@@ -1189,4 +1195,3 @@ log_devel_leaking_fds(const char *exe, int min, int max)
     }
 }
 #endif // USE_DEVEL_LOGGING
-

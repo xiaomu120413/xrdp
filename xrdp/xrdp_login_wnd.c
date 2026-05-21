@@ -880,8 +880,9 @@ xrdp_login_wnd_create(struct xrdp_wm *self)
                 }
                 else
                 {
-                    g_snprintf(fileName, 255, "%s/%s",
-                               XRDP_SHARE_PATH, globals->ls_background_image);
+                    xrdp_make_runtime_path(fileName, sizeof(fileName),
+                                           "XRDP_SHARE_PATH", XRDP_SHARE_PATH,
+                                           globals->ls_background_image);
                 }
                 LOG(LOG_LEVEL_DEBUG, "We try to load the following background file: %s", fileName);
                 if (globals->ls_background_transform == XBLT_NONE)
@@ -915,11 +916,13 @@ xrdp_login_wnd_create(struct xrdp_wm *self)
         if (globals->ls_logo_filename[0] == 0)
         {
 #ifdef USE_IMLIB2
-            g_snprintf(globals->ls_logo_filename, 255, "%s/xrdp_logo.png",
-                       XRDP_SHARE_PATH);
+            xrdp_make_runtime_path(globals->ls_logo_filename, 255,
+                                   "XRDP_SHARE_PATH", XRDP_SHARE_PATH,
+                                   "xrdp_logo.png");
 #else
-            g_snprintf(globals->ls_logo_filename, 255, "%s/xrdp_logo.bmp",
-                       XRDP_SHARE_PATH);
+            xrdp_make_runtime_path(globals->ls_logo_filename, 255,
+                                   "XRDP_SHARE_PATH", XRDP_SHARE_PATH,
+                                   "xrdp_logo.bmp");
 #endif
         }
 
@@ -928,7 +931,9 @@ xrdp_login_wnd_create(struct xrdp_wm *self)
 
         if (self->screen->bpp <= 8)
         {
-            g_snprintf(globals->ls_logo_filename, 255, "%s/ad256.bmp", XRDP_SHARE_PATH);
+            xrdp_make_runtime_path(globals->ls_logo_filename, 255,
+                                   "XRDP_SHARE_PATH", XRDP_SHARE_PATH,
+                                   "ad256.bmp");
         }
 
         LOG(LOG_LEVEL_DEBUG, "ls_logo_filename: %s", globals->ls_logo_filename);

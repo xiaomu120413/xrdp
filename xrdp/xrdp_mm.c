@@ -2592,7 +2592,8 @@ xrdp_mm_get_sesman_port(char *port, int port_bytes)
     /* default to port 3350 */
     strlcpy(port, "3350", port_bytes);
     /* see if port is in sesman.ini file */
-    g_snprintf(cfg_file, 255, "%s/sesman.ini", XRDP_CFG_PATH);
+    xrdp_make_runtime_path(cfg_file, sizeof(cfg_file), "XRDP_CFG_PATH",
+                           XRDP_CFG_PATH, "sesman.ini");
     fd = g_file_open_ro(cfg_file);
 
     if (fd >= 0)
@@ -5301,7 +5302,10 @@ xrdp_mm_setup_mod1(struct xrdp_mm *self)
 
     if (self->mod_handle == 0)
     {
-        g_snprintf(text, sizeof(text), "%s/%s", XRDP_MODULE_PATH, lib);
+        const char *module_path = xrdp_get_runtime_path("XRDP_MODULE_PATH",
+                                                        XRDP_MODULE_PATH);
+
+        g_snprintf(text, sizeof(text), "%s/%s", module_path, lib);
         /* Let the main thread load the lib,*/
         self->mod_handle = g_xrdp_sync(xrdp_mm_sync_load, (tintptr)text, 0);
 

@@ -615,13 +615,15 @@ xrdp_wm_load_static_pointers(struct xrdp_wm *self)
     char file_path[256];
 
     LOG_DEVEL(LOG_LEVEL_TRACE, "sending cursor");
-    g_snprintf(file_path, 255, "%s/cursor1.cur", XRDP_SHARE_PATH);
+    xrdp_make_runtime_path(file_path, sizeof(file_path), "XRDP_SHARE_PATH",
+                           XRDP_SHARE_PATH, "cursor1.cur");
     g_memset(&pointer_item, 0, sizeof(pointer_item));
     xrdp_wm_load_pointer(self, file_path, pointer_item.data,
                          pointer_item.mask, &pointer_item.x, &pointer_item.y);
     xrdp_cache_add_pointer_static(self->cache, &pointer_item, 1);
     LOG_DEVEL(LOG_LEVEL_TRACE, "sending cursor");
-    g_snprintf(file_path, 255, "%s/cursor0.cur", XRDP_SHARE_PATH);
+    xrdp_make_runtime_path(file_path, sizeof(file_path), "XRDP_SHARE_PATH",
+                           XRDP_SHARE_PATH, "cursor0.cur");
     g_memset(&pointer_item, 0, sizeof(pointer_item));
     xrdp_wm_load_pointer(self, file_path, pointer_item.data,
                          pointer_item.mask, &pointer_item.x, &pointer_item.y);
@@ -648,7 +650,9 @@ xrdp_wm_init(struct xrdp_wm *self)
     load_xrdp_config(self->xrdp_config, self->session->xrdp_ini,
                      self->screen->bpp);
 
-    tconfig_load_gfx(XRDP_CFG_PATH "/gfx.toml", self->gfx_config);
+    xrdp_make_runtime_path(param, sizeof(param), "XRDP_CFG_PATH",
+                           XRDP_CFG_PATH, "gfx.toml");
+    tconfig_load_gfx(param, self->gfx_config);
 
     /* Remove a font loaded on the previous config */
     xrdp_font_delete(self->default_font);

@@ -1,11 +1,21 @@
 EXTRA_DIST = \
   xrdp_surface.c
 
+if XRDP_OHOS
+XRDP_RUNTIME_CFG_PATH = /data/storage/el2/base/files/xrdp/config
+XRDP_RUNTIME_SHARE_PATH = /data/storage/el2/base/files/xrdp/share
+XRDP_RUNTIME_PID_PATH = /data/storage/el2/base/files/xrdp/run
+else
+XRDP_RUNTIME_CFG_PATH = ${sysconfdir}/${sysconfsubdir}
+XRDP_RUNTIME_SHARE_PATH = ${datadir}/xrdp
+XRDP_RUNTIME_PID_PATH = ${localstatedir}/run
+endif
+
 AM_CPPFLAGS = \
-  -DXRDP_CFG_PATH=\"${sysconfdir}/${sysconfsubdir}\" \
+  -DXRDP_CFG_PATH=\"$(XRDP_RUNTIME_CFG_PATH)\" \
   -DXRDP_SBIN_PATH=\"${sbindir}\" \
-  -DXRDP_SHARE_PATH=\"${datadir}/xrdp\" \
-  -DXRDP_PID_PATH=\"${localstatedir}/run\" \
+  -DXRDP_SHARE_PATH=\"$(XRDP_RUNTIME_SHARE_PATH)\" \
+  -DXRDP_PID_PATH=\"$(XRDP_RUNTIME_PID_PATH)\" \
   -I$(top_srcdir)/common
 
 AM_CFLAGS = $(OPENSSL_CFLAGS)

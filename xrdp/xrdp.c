@@ -36,6 +36,50 @@
 
 static struct xrdp_listen *g_listen = 0;
 
+int xrdp_server_request_shutdown(void);
+int xrdp_server_main(int argc, char **argv);
+
+#if defined(XRDP_OHOS)
+int xrdp_ohos_server_main(int argc, char **argv);
+int xrdp_ohos_server_stop(void);
+#endif
+
+/*****************************************************************************/
+const char *
+xrdp_get_runtime_path(const char *env_name, const char *fallback)
+{
+#if defined(XRDP_OHOS)
+    const char *value = g_getenv(env_name);
+
+    if (value != NULL && value[0] != '\0')
+    {
+        return value;
+    }
+#else
+    (void)env_name;
+#endif
+
+    return fallback;
+}
+
+/*****************************************************************************/
+void
+xrdp_make_runtime_path(char *out, int out_len, const char *env_name,
+                       const char *fallback, const char *name)
+{
+    const char *base = xrdp_get_runtime_path(env_name, fallback);
+    const int base_len = g_strlen(base);
+
+    if (base_len > 0 && base[base_len - 1] == '/')
+    {
+        g_snprintf(out, out_len, "%s%s", base, name);
+    }
+    else
+    {
+        g_snprintf(out, out_len, "%s/%s", base, name);
+    }
+}
+
 
 /*****************************************************************************/
 static void
@@ -90,7 +134,7 @@ print_help(void)
  * this function. For more details see `man signal-safety`
  */
 static void
-xrdp_shutdown(int sig)
+xrdp_signal_shutdown(int sig)
 {
     g_set_wait_obj(g_get_term());
 }
@@ -378,7 +422,10 @@ xrdp_sanity_check(void)
 {
     int intval = 1;
     int host_be;
-    const char *key_file = XRDP_CFG_PATH "/rsakeys.ini";
+    char key_file[256];
+
+    xrdp_make_runtime_path(key_file, sizeof(key_file), "XRDP_CFG_PATH",
+                           XRDP_CFG_PATH, "rsakeys.ini");
 
     /* check compiled endian with actual endian */
     host_be = !((int)(*(unsigned char *)(&intval)));
@@ -419,8 +466,12 @@ xrdp_sanity_check(void)
 
     if (!g_file_exist(key_file))
     {
+#if defined(XRDP_OHOS)
+        g_writeln("File %s is missing, continuing for OHOS minimal RDP security layer", key_file);
+#else
         g_writeln("File %s is missing, create it using xrdp-keygen", key_file);
         return 1;
+#endif
     }
 
     return 0;
@@ -553,7 +604,22 @@ kill_daemon(const char *pid_file)
 
 /*****************************************************************************/
 int
-main(int argc, char **argv)
+xrdp_server_request_shutdown(void)
+{
+    intptr_t term_obj;
+
+    term_obj = g_get_term();
+    if (term_obj == 0)
+    {
+        return 1;
+    }
+
+    return g_set_wait_obj(term_obj);
+}
+
+/*****************************************************************************/
+int
+xrdp_server_main(int argc, char **argv)
 {
     int exit_status = 1;
     enum logReturns error;
@@ -562,7 +628,8 @@ main(int argc, char **argv)
     int daemon_pid = 0;
     int daemon;
     char text[256];
-    const char *pid_file = XRDP_PID_PATH "/xrdp.pid";
+    char pid_file[256];
+    char xrdp_ini[256];
     int errored_argc;
 
 #ifdef USE_DEVEL_LOGGING
@@ -576,7 +643,11 @@ main(int argc, char **argv)
     g_init("xrdp");
     ssl_init();
 
-    startup_params.xrdp_ini = XRDP_CFG_PATH "/xrdp.ini";
+    xrdp_make_runtime_path(pid_file, sizeof(pid_file), "XRDP_PID_PATH",
+                           XRDP_PID_PATH, "xrdp.pid");
+    xrdp_make_runtime_path(xrdp_ini, sizeof(xrdp_ini), "XRDP_CFG_PATH",
+                           XRDP_CFG_PATH, "xrdp.ini");
+    startup_params.xrdp_ini = xrdp_ini;
 
     errored_argc = xrdp_process_params(argc, argv, &startup_params);
     if (errored_argc > 0)
@@ -588,7 +659,7 @@ main(int argc, char **argv)
 
         g_writeln("Unknown option: %s", argv[errored_argc]);
         g_deinit();
-        g_exit(1);
+        return 1;
     }
 
     if (startup_params.help)
@@ -598,35 +669,35 @@ main(int argc, char **argv)
         print_help();
 
         g_deinit();
-        g_exit(0);
+        return 0;
     }
 
     if (startup_params.version)
     {
         print_version();
         g_deinit();
-        g_exit(0);
+        return 0;
     }
 
     if (startup_params.license)
     {
         print_license();
         g_deinit();
-        g_exit(0);
+        return 0;
     }
 
     if (xrdp_sanity_check() != 0)
     {
         g_writeln("Fatal error occurred, exiting");
         g_deinit();
-        g_exit(1);
+        return 1;
     }
 
     if (startup_params.kill)
     {
         int status = kill_daemon(pid_file);
         g_deinit();
-        g_exit(status);
+        return status;
     }
 
     /* starting logging subsystem */
@@ -654,14 +725,14 @@ main(int argc, char **argv)
         }
 
         g_deinit();
-        g_exit(1);
+        return 1;
     }
 
     if (read_xrdp_ini_startup_params(&startup_params) != 0)
     {
         log_end();
         g_deinit();
-        g_exit(1);
+        return 1;
     }
 
     if ((pid = read_pid_file(pid_file)) > 0 && g_pid_is_active(pid))
@@ -671,7 +742,7 @@ main(int argc, char **argv)
         LOG(LOG_LEVEL_ALWAYS, "If not, delete %s and try again.", pid_file);
         log_end();
         g_deinit();
-        g_exit(1);
+        return 1;
     }
 
     daemon = !startup_params.no_daemon;
@@ -691,7 +762,7 @@ main(int argc, char **argv)
                 "running in daemon mode with no access to pid files, quitting");
             log_end();
             g_deinit();
-            g_exit(1);
+            return 1;
         }
 
         /* Before daemonising, check we can listen.
@@ -709,7 +780,7 @@ main(int argc, char **argv)
             g_deinit();
             /* must exit with failure status,
                or systemd cannot detect xrdp daemon couldn't start properly */
-            g_exit(1);
+            return 1;
         }
 
         /* start of daemonizing code */
@@ -720,7 +791,7 @@ main(int argc, char **argv)
             LOG(LOG_LEVEL_ALWAYS, "problem forking [%s]", g_get_strerror());
             log_end();
             g_deinit();
-            g_exit(1);
+            return 1;
         }
 
         if (0 != pid)
@@ -728,7 +799,7 @@ main(int argc, char **argv)
             /* exit, this is the main process */
             log_end();
             g_deinit();
-            g_exit(0);
+            return 0;
         }
 
         daemon_pid = g_getpid();
@@ -767,9 +838,9 @@ main(int argc, char **argv)
     else if (check_drop_privileges(&startup_params) == 0)
     {
         g_set_threadid(tc_get_threadid());
-        g_signal_user_interrupt(xrdp_shutdown); /* SIGINT */
+        g_signal_user_interrupt(xrdp_signal_shutdown); /* SIGINT */
         g_signal_pipe(xrdp_sig_no_op);          /* SIGPIPE */
-        g_signal_terminate(xrdp_shutdown);      /* SIGTERM */
+        g_signal_terminate(xrdp_signal_shutdown);      /* SIGTERM */
         g_signal_child_stop(xrdp_child);        /* SIGCHLD */
         g_signal_hang_up(xrdp_sig_no_op);       /* SIGHUP */
         g_set_sync_mutex(tc_mutex_create());
@@ -830,14 +901,27 @@ main(int argc, char **argv)
     log_end();
     g_deinit();
 
-    if (exit_status == 0)
-    {
-        g_exit(0);
-    }
-    else
-    {
-        g_exit(1);
-    }
-
-    return 0;
+    return (exit_status == 0) ? 0 : 1;
 }
+
+#if defined(XRDP_OHOS)
+int
+xrdp_ohos_server_main(int argc, char **argv)
+{
+    return xrdp_server_main(argc, argv);
+}
+
+int
+xrdp_ohos_server_stop(void)
+{
+    return xrdp_server_request_shutdown();
+}
+#endif
+
+#if !defined(XRDP_EMBEDDED_LIBRARY)
+int
+main(int argc, char **argv)
+{
+    return xrdp_server_main(argc, argv);
+}
+#endif
