@@ -17,6 +17,24 @@
 #define OHOS_MOD_VER 4
 #define OHOS_MOUSE_LOG_SAMPLE 64
 #define OHOS_FRAME_MAX_DIMENSION 8192
+#define OHOS_INPUT_EVENT_VERSION 1
+
+struct xrdp_ohos_input_event
+{
+    int version;
+    int msg;
+    long param1;
+    long param2;
+    long param3;
+    long param4;
+    int width;
+    int height;
+    int bpp;
+    int connected;
+};
+
+typedef void (*xrdp_ohos_input_event_fn)(const struct xrdp_ohos_input_event *event,
+                                         void *user_data);
 
 struct ohos_mod
 {
@@ -39,10 +57,17 @@ struct ohos_mod
 static tbus g_ohos_frame_mutex = 0;
 static struct ohos_mod *g_ohos_active_mod = 0;
 static int g_ohos_frame_sequence = 0;
+static tbus g_ohos_input_mutex = 0;
+static xrdp_ohos_input_event_fn g_ohos_input_callback = 0;
+static void *g_ohos_input_callback_user = 0;
 
 int EXPORT_CC
 xrdp_ohos_backend_submit_bgra_frame(const void *data, int width, int height,
                                     int stride);
+
+int EXPORT_CC
+xrdp_ohos_backend_set_input_callback(xrdp_ohos_input_event_fn callback,
+                                     void *user_data);
 
 static int
 ohos_ensure_frame_mutex(void)
@@ -74,10 +99,75 @@ ohos_unlock_frame_state(void)
     return tc_mutex_unlock(g_ohos_frame_mutex);
 }
 
+static int
+ohos_ensure_input_mutex(void)
+{
+    if (g_ohos_input_mutex == 0)
+    {
+        g_ohos_input_mutex = tc_mutex_create();
+    }
+    return g_ohos_input_mutex != 0;
+}
+
+static int
+ohos_lock_input_state(void)
+{
+    if (!ohos_ensure_input_mutex())
+    {
+        return 1;
+    }
+    return tc_mutex_lock(g_ohos_input_mutex);
+}
+
+static int
+ohos_unlock_input_state(void)
+{
+    if (g_ohos_input_mutex == 0)
+    {
+        return 1;
+    }
+    return tc_mutex_unlock(g_ohos_input_mutex);
+}
+
 static struct ohos_mod *
 ohos_from_mod(struct mod *mod)
 {
     return (struct ohos_mod *)mod;
+}
+
+static void
+ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
+                         tbus param2, tbus param3, tbus param4)
+{
+    xrdp_ohos_input_event_fn callback;
+    void *user_data;
+    struct xrdp_ohos_input_event event;
+
+    if (self == 0 || ohos_lock_input_state() != 0)
+    {
+        return;
+    }
+
+    callback = g_ohos_input_callback;
+    user_data = g_ohos_input_callback_user;
+    ohos_unlock_input_state();
+
+    if (callback == 0)
+    {
+        return;
+    }
+
+    event.version = OHOS_INPUT_EVENT_VERSION;
+    event.msg = msg;
+    event.param1 = (long)param1;
+    event.param2 = (long)param2;
+    event.param3 = (long)param3;
+    event.param4 = (long)param4;
+    event.width = self->width;
+    event.height = self->height;
+    event.bpp = self->bpp;
+    event.connected = self->connected;
+    callback(&event, user_data);
 }
 
 static int
@@ -370,6 +460,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
             break;
     }
 
+    ohos_forward_input_event(self, msg, param1, param2, param3, param4);
     return 0;
 }
 
@@ -641,5 +732,23 @@ xrdp_ohos_backend_submit_bgra_frame(const void *data, int width, int height,
         g_set_wait_obj(wait_obj);
     }
 
+    return 0;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_set_input_callback(xrdp_ohos_input_event_fn callback,
+                                     void *user_data)
+{
+    if (ohos_lock_input_state() != 0)
+    {
+        return 1;
+    }
+
+    g_ohos_input_callback = callback;
+    g_ohos_input_callback_user = user_data;
+    ohos_unlock_input_state();
+
+    LOG(LOG_LEVEL_INFO, "xrdp.ohos.input: callback %s",
+        callback == 0 ? "cleared" : "registered");
     return 0;
 }
