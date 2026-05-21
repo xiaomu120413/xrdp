@@ -98,7 +98,7 @@ ohos_input_inject_key(struct ohos_input_context *ctx,
         ctx->key_sent_count++;
         if (ohos_input_should_log_result(ctx, 1, 0))
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: key inject key_code=%d %s scancode=%ld keysym=%ld rc=%d",
                 key_code, down ? "down" : "up",
                 event->param3, event->param2, rc);
@@ -203,7 +203,7 @@ ohos_input_inject_mouse(struct ohos_input_context *ctx,
         }
         if (ohos_input_should_log_result(ctx, 1, event->msg != XRDP_OHOS_WM_MOUSEMOVE))
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: mouse inject msg=%d action=%d button=%d remote=(%ld,%ld) display=(%d,%d) global=(%d,%d) source=%dx%d target=%dx%d axis_type=%d axis_value=%.1f rc=%d end_rc=%d",
                 event->msg, dispatch->action, dispatch->button,
                 event->param1, event->param2,

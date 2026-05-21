@@ -61,7 +61,7 @@ ohos_input_authorize_callback(Input_InjectionStatus status)
 static int
 ohos_input_should_log_auth(uint32_t count)
 {
-    return count <= 20U || (count % 200U) == 0U;
+    return count <= 3U || (count % 500U) == 0U;
 }
 
 int
@@ -117,7 +117,7 @@ ohos_input_ensure_authorized(const char *reason)
         uint32_t count = ++g_authorization_log_count;
         if (ohos_input_should_log_auth(count))
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: injection authorization pending reason=%s query_rc=%d status=%d",
                 reason == 0 ? "" : reason, (int)query_rc, (int)status);
         }

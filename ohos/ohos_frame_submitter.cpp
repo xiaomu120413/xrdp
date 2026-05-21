@@ -32,6 +32,12 @@ void EmitSubmitterInfo(const std::string& line)
     OH_LOG_Print(LOG_APP, LOG_INFO, kLogDomain, kLogTag, "%{public}s", clipped.c_str());
 }
 
+void EmitSubmitterDebug(const std::string& line)
+{
+    const std::string clipped = ClipHilogLine(line);
+    OH_LOG_Print(LOG_APP, LOG_DEBUG, kLogDomain, kLogTag, "%{public}s", clipped.c_str());
+}
+
 void EmitSubmitterError(const std::string& line)
 {
     const std::string clipped = ClipHilogLine(line);
@@ -438,7 +444,7 @@ void FrameSubmitter::WorkerLoop()
 
         if (status == 0) {
             if (submitted <= 3 || (submitted % 60U) == 0U) {
-                EmitSubmitterInfo("xrdp video frame submitted: seq=" + std::to_string(frame.sequence) +
+                EmitSubmitterDebug("xrdp video frame submitted: seq=" + std::to_string(frame.sequence) +
                     " size=" + std::to_string(frame.width) + "x" + std::to_string(frame.height) +
                     " copy=" + std::to_string(frame.copyUs / 1000.0) +
                     "ms submit=" + std::to_string(submitUs / 1000.0) +

@@ -403,7 +403,7 @@ void RawScreenCapture::QueueMappedFrame(const OH_NativeBuffer_Config& config, co
     if (queued) {
         const uint64_t submitted = submittedCount_.fetch_add(1) + 1;
         if (submitted <= 3 || (submitted % 60U) == 0U) {
-            EmitCaptureInfo("xrdp screen capture frame queued: seq=" + std::to_string(readyCount) +
+            EmitCaptureDebug("xrdp screen capture frame queued: seq=" + std::to_string(readyCount) +
                 " size=" + std::to_string(config.width) + "x" + std::to_string(config.height) +
                 " target=" + DescribeCaptureOptions(target) +
                 " stride=" + std::to_string(rowBytes) +

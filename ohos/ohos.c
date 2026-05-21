@@ -782,12 +782,12 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
         if (self->frame_draw_count <= 3 ||
                 (self->frame_draw_count % 30) == 0)
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.frame: queued AVC420 frame seq=%d source_seq=%llu pixel=%s size=%dx%d dst=%dx%d bytes=%d",
                 sequence, (unsigned long long)source_sequence,
                 ohos_frame_format_name(frame_format), frame_width, frame_height,
                 paint_width, paint_height, (int)frame_data_bytes);
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.e2e: enqueue frame=%d source_seq=%llu capture_to_bridge=%.3fms bridge_to_submitter=%.3fms submitter_copy=%.3fms submitter_to_backend=%.3fms backend_copy=%.3fms backend_to_draw=%.3fms avc420_copy_or_convert=%.3fms avc420_enqueue=%.3fms pixel=%s",
                 sequence, (unsigned long long)source_sequence,
                 ohos_delta_us(bridge_queue_us, capture_acquire_us) / 1000.0,
@@ -837,7 +837,7 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     self->frame_draw_count++;
     if (self->frame_draw_count <= 3 || (self->frame_draw_count % 30) == 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.frame: painted external BGRA frame seq=%d source_seq=%llu size=%dx%d dst=%dx%d rv=%d",
             sequence, (unsigned long long)source_sequence, frame_width,
             frame_height, paint_width, paint_height, rv);
@@ -1106,7 +1106,7 @@ ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
     if (has_trace && (self->frame_ack_count <= 5 ||
             (self->frame_ack_count % 60ULL) == 0))
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.e2e: ack frame=%d source_seq=%llu total_from_acquire=%.3fms bridge=%.3fms submitter_wait=%.3fms submitter_copy=%.3fms backend_wait=%.3fms backend_copy=%.3fms draw_wait=%.3fms avc420_copy_or_convert=%.3fms avc420_enqueue=%.3fms encode_and_client_ack=%.3fms flags=0x%8.8x pixel=%s",
             frame_id, (unsigned long long)trace.source_sequence,
             ohos_delta_us(ack_us, trace.capture_acquire_us) / 1000.0,
@@ -1124,7 +1124,7 @@ ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
     else if (!has_trace && (self->frame_ack_count <= 5 ||
              (self->frame_ack_count % 60ULL) == 0))
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.e2e: ack frame=%d has no trace flags=0x%8.8x",
             frame_id, flags);
     }
@@ -1648,7 +1648,7 @@ xrdp_ohos_backend_submit_encoded_frame(
     }
     if (sequence <= 5 || (sequence % 60) == 0 || queue_count > 1)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.h264: queued encoded frame seq=%d source_seq=%llu bytes=%d queue=%d sync=%d",
             sequence, (unsigned long long)frame->source_sequence,
             frame->bytes, queue_count,

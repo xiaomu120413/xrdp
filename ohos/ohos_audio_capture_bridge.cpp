@@ -26,6 +26,12 @@ void EmitInfo(const std::string& line)
     OH_LOG_Print(LOG_APP, LOG_INFO, kLogDomain, kLogTag, "%{public}s", clipped.c_str());
 }
 
+void EmitDebug(const std::string& line)
+{
+    const std::string clipped = ClipHilogLine(line);
+    OH_LOG_Print(LOG_APP, LOG_DEBUG, kLogDomain, kLogTag, "%{public}s", clipped.c_str());
+}
+
 void EmitError(const std::string& line)
 {
     const std::string clipped = ClipHilogLine(line);
@@ -270,7 +276,7 @@ bool AudioCapturePump::ProcessOneAudioBuffer(OH_AVScreenCapture* capture,
         const uint64_t totalBytes = audioBytes_.fetch_add(static_cast<uint64_t>(frame.bytes)) +
             static_cast<uint64_t>(frame.bytes);
         if (submitted <= 3 || (submitted % 120U) == 0U) {
-            EmitInfo("xrdp audio capture queued: seq=" +
+            EmitDebug("xrdp audio capture queued: seq=" +
                 std::to_string(audioReadyCount) +
                 " bytes=" + std::to_string(frame.bytes) +
                 " type=" + std::to_string(static_cast<int>(releaseType)) +

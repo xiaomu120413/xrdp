@@ -14,6 +14,7 @@ constexpr uint32_t kMaxCaptureDimension = 8192;
 constexpr uint32_t kDefaultCaptureFrameRate = 15;
 
 uint64_t NowUs();
+void EmitCaptureDebug(const std::string& line);
 void EmitCaptureInfo(const std::string& line);
 void EmitCaptureError(const std::string& line);
 std::string CaptureErrToString(OH_AVSCREEN_CAPTURE_ErrCode code);

@@ -140,7 +140,7 @@ ohos_rdpsnd_send_wave_chunk(struct ohos_rdpsnd *rdpsnd,
         if (rdpsnd->sent_chunks <= 3 ||
                 (rdpsnd->sent_chunks % 120) == 0)
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.rdpsnd: sent wave chunk bytes=%d block=%d chunks=%u total_bytes=%u",
                 data_bytes, rdpsnd->block_no & 0xff, rdpsnd->sent_chunks,
                 rdpsnd->sent_bytes);
@@ -319,7 +319,7 @@ ohos_rdpsnd_process_wave_confirm(struct ohos_rdpsnd *rdpsnd,
     rdpsnd->confirms++;
     if (rdpsnd->confirms <= 3 || (rdpsnd->confirms % 120) == 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.rdpsnd: wave confirm block=%d timestamp=%d diff_ms=%u confirms=%u",
             block_no, timestamp, diff, rdpsnd->confirms);
     }

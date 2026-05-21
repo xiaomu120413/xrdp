@@ -283,7 +283,7 @@ ohos_rdpsnd_submit_audio(struct ohos_rdpsnd *rdpsnd,
             (rdpsnd->submitted_buffers % 120) == 0 ||
             dropped != dropped_before)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(dropped != dropped_before ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
             "xrdp.ohos.rdpsnd: audio queued bytes=%d queued_bytes=%d submitted=%u dropped=%d ts=%llu",
             frame->bytes, queued_bytes, rdpsnd->submitted_buffers, dropped,
             (unsigned long long)frame->source_timestamp);

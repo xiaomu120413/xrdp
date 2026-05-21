@@ -425,7 +425,7 @@ void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
     if (queued) {
         const uint64_t submitted = submittedCount_.fetch_add(1) + 1;
         if (submitted <= 5 || (submitted % 60U) == 0U) {
-            EmitCaptureInfo("xrdp surface H264 frame queued: seq=" + std::to_string(sequence) +
+            EmitCaptureDebug("xrdp surface H264 frame queued: seq=" + std::to_string(sequence) +
                 " size=" + std::to_string(target.width) + "x" + std::to_string(target.height) +
                 " bytes=" + std::to_string(payload.size()) +
                 " flags=0x" + std::to_string(static_cast<uint32_t>(attr.flags)) +

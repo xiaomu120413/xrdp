@@ -30,6 +30,12 @@ void EmitCaptureInfo(const std::string& line)
     OH_LOG_Print(LOG_APP, LOG_INFO, kLogDomain, kLogTag, "%{public}s", clipped.c_str());
 }
 
+void EmitCaptureDebug(const std::string& line)
+{
+    const std::string clipped = ClipHilogLine(line);
+    OH_LOG_Print(LOG_APP, LOG_DEBUG, kLogDomain, kLogTag, "%{public}s", clipped.c_str());
+}
+
 void EmitCaptureError(const std::string& line)
 {
     const std::string clipped = ClipHilogLine(line);
