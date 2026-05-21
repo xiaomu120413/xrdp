@@ -83,6 +83,7 @@ ohos_cliprdr_connect(struct ohos_cliprdr *cliprdr)
     cliprdr->connected = 1;
     cliprdr->channel_ready = 0;
     cliprdr->requested_format = 0;
+    cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
 
     if (cliprdr->mod->server_chansrv_in_use != 0 &&
             cliprdr->mod->server_chansrv_in_use(cliprdr->mod))
@@ -141,6 +142,7 @@ ohos_cliprdr_disconnect(struct ohos_cliprdr *cliprdr)
     cliprdr->channel_ready = 0;
     cliprdr->channel_id = -1;
     cliprdr->requested_format = 0;
+    cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
     cliprdr->local_change_pending = 0;
     ohos_cliprdr_channel_reset(cliprdr);
 }

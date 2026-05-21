@@ -99,7 +99,7 @@ ohos_cliprdr_send_format_list_response(struct ohos_cliprdr *cliprdr,
 
 int
 ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
-                                      int format_id)
+                                      int format_id, int request_kind)
 {
     struct stream *s;
     int rv;
@@ -120,9 +120,10 @@ ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
     s_mark_end(s);
 
     cliprdr->requested_format = format_id;
+    cliprdr->requested_kind = request_kind;
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: requesting remote clipboard data format=%d",
-        format_id);
+        "xrdp.ohos.cliprdr: requesting remote clipboard data format=%d kind=%d",
+        format_id, request_kind);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
     free_stream(s);
     return rv;
@@ -130,30 +131,17 @@ ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
 
 int
 ohos_cliprdr_send_format_data_response(struct ohos_cliprdr *cliprdr,
-                                       int format_id, const char *text)
+                                       const char *data, int bytes)
 {
     struct stream *s;
     int rv;
-    int data_ok = (text != 0);
-    int text_len = data_ok ? g_strlen(text) : 0;
-    int stream_size = 64;
+    int data_ok = (data != 0 && bytes > 0);
+    int stream_size = 64 + (data_ok ? bytes : 0);
 
     make_stream(s);
     if (s == 0)
     {
         return 1;
-    }
-    if (data_ok)
-    {
-        if (format_id == CF_TEXT || format_id == CF_OEMTEXT)
-        {
-            stream_size += text_len + 1;
-        }
-        else
-        {
-            stream_size +=
-                (int)utf8_as_utf16_word_count(text, text_len) * 2 + 2;
-        }
     }
     init_stream(s, stream_size);
     if (s->data == 0)
@@ -165,15 +153,7 @@ ohos_cliprdr_send_format_data_response(struct ohos_cliprdr *cliprdr,
                             data_ok ? CB_RESPONSE_OK : CB_RESPONSE_FAIL);
     if (data_ok)
     {
-        if (format_id == CF_TEXT || format_id == CF_OEMTEXT)
-        {
-            out_uint8p(s, text, text_len + 1);
-        }
-        else
-        {
-            out_utf8_as_utf16_le(s, text, text_len);
-            out_uint16_le(s, 0);
-        }
+        out_uint8p(s, data, bytes);
     }
     s_mark_end(s);
 
@@ -182,13 +162,34 @@ ohos_cliprdr_send_format_data_response(struct ohos_cliprdr *cliprdr,
     return rv;
 }
 
+static void
+ohos_cliprdr_out_format(struct stream *s, int format_id, const char *name)
+{
+    out_uint32_le(s, format_id);
+    if (name != 0 && name[0] != '\0')
+    {
+        out_utf8_as_utf16_le(s, name, g_strlen(name));
+        out_uint16_le(s, 0);
+    }
+    else
+    {
+        out_uint16_le(s, 0);
+    }
+}
+
 int
 ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
                                     const char *reason, int allow_empty)
 {
     struct stream *s;
     char *text = 0;
+    char *html = 0;
+    char *uri = 0;
     int has_text;
+    int has_html;
+    int has_uri;
+    int has_image;
+    int image_format = 0;
     int rv;
 
     if (cliprdr == 0 || !cliprdr->connected || !cliprdr->channel_ready)
@@ -197,7 +198,10 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     }
 
     has_text = (ohos_cliprdr_pasteboard_read_plain_text(cliprdr, &text) == 0);
-    if (!has_text && !allow_empty)
+    has_html = (ohos_cliprdr_pasteboard_read_html(cliprdr, &html, 0) == 0);
+    has_uri = (ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) == 0);
+    has_image = ohos_cliprdr_has_local_image(cliprdr, &image_format);
+    if (!has_text && !has_html && !has_uri && !has_image && !allow_empty)
     {
         return 0;
     }
@@ -206,21 +210,45 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     if (s == 0)
     {
         g_free(text);
+        g_free(html);
+        g_free(uri);
         return 1;
     }
-    init_stream(s, 256);
+    init_stream(s, 1024);
     if (s->data == 0)
     {
         free_stream(s);
         g_free(text);
+        g_free(html);
+        g_free(uri);
         return 1;
     }
 
     ohos_cliprdr_out_header(s, CB_FORMAT_LIST, 0);
-    if (has_text)
+    if (has_text || has_html || has_uri)
     {
-        out_uint32_le(s, CF_UNICODETEXT);
-        out_uint16_le(s, 0);
+        ohos_cliprdr_out_format(s, CF_UNICODETEXT, 0);
+    }
+    if (has_html)
+    {
+        ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_HTML,
+                                ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_HTML));
+    }
+    if (has_uri)
+    {
+        ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_URIW,
+                                ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_URIW));
+        ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_URI_LIST,
+                                ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_URI_LIST));
+    }
+    if (has_image)
+    {
+        ohos_cliprdr_out_format(s, CF_DIB, 0);
+        if (image_format != 0)
+        {
+            ohos_cliprdr_out_format(s, image_format,
+                                    ohos_cliprdr_format_name(image_format));
+        }
     }
     s_mark_end(s);
 
@@ -229,8 +257,8 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     {
         cliprdr->local_format_lists_sent++;
         LOG(LOG_LEVEL_INFO,
-            "xrdp.ohos.cliprdr: sent local format list has_text=%d reason=%s",
-            has_text, reason == 0 ? "" : reason);
+            "xrdp.ohos.cliprdr: sent local formats text=%d html=%d uri=%d image=%d reason=%s",
+            has_text, has_html, has_uri, has_image, reason == 0 ? "" : reason);
     }
     else
     {
@@ -239,6 +267,8 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
 
     free_stream(s);
     g_free(text);
+    g_free(html);
+    g_free(uri);
     return rv;
 }
 

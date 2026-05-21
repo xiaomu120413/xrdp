@@ -15,110 +15,148 @@
 #include "string_calls.h"
 #include "xrdp_constants.h"
 
-static char *
-ohos_cliprdr_utf16le_to_utf8(const char *data, int bytes)
-{
-    struct stream s = { 0 };
-    unsigned int text_bytes;
-    char *text;
-
-    if (data == 0 || bytes <= 0)
-    {
-        return 0;
-    }
-
-    s.data = (char *)data;
-    s.p = (char *)data;
-    s.end = (char *)data + bytes;
-    s.size = bytes;
-    text_bytes = in_utf16_le_terminated_as_utf8_length(&s);
-    if (text_bytes == 0)
-    {
-        return 0;
-    }
-
-    text = (char *)g_malloc(text_bytes, 1);
-    if (text == 0)
-    {
-        return 0;
-    }
-
-    s.p = s.data;
-    (void)in_utf16_le_terminated_as_utf8(&s, text, text_bytes);
-    return text;
-}
-
-static char *
-ohos_cliprdr_bytes_to_text(const char *data, int bytes)
-{
-    int len;
-
-    if (data == 0 || bytes <= 0)
-    {
-        return 0;
-    }
-
-    for (len = 0; len < bytes && data[len] != '\0'; len++)
-    {
-    }
-    if (len <= 0)
-    {
-        return 0;
-    }
-
-    return g_strndup(data, len);
-}
-
 static int
 ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
                                  int msg_flags, struct stream *s)
 {
     int requested = 0;
-    int seen_text = 0;
+    int requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    int text_format = 0;
+    int image_format = 0;
+    int image_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    int image_priority = 0;
     int format_id;
+
+    cliprdr->remote_html_format = 0;
+    cliprdr->remote_uriw_format = 0;
+    cliprdr->remote_uri_list_format = 0;
+    cliprdr->remote_image_bmp_format = 0;
+    cliprdr->remote_image_png_format = 0;
+    cliprdr->remote_image_jpeg_format = 0;
+    cliprdr->remote_image_webp_format = 0;
 
     while (s_check_rem(s, 4))
     {
-        in_uint32_le(s, format_id);
+        char *name;
 
-        if ((cliprdr->capability_flags & CB_USE_LONG_FORMAT_NAMES) != 0 &&
-                ((msg_flags & CB_ASCII_NAMES) == 0))
-        {
-            int wchar = 1;
-            while (s_check_rem(s, 2) && wchar != 0)
-            {
-                in_uint16_le(s, wchar);
-            }
-        }
-        else
-        {
-            int skip = s_rem(s) < 32 ? s_rem(s) : 32;
-            in_uint8s(s, skip);
-        }
+        in_uint32_le(s, format_id);
+        name = ohos_cliprdr_read_format_name(s, msg_flags);
 
         LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.cliprdr: remote format id=%d", format_id);
-        if (format_id == CF_UNICODETEXT)
+            "xrdp.ohos.cliprdr: remote format id=%d name=%s",
+            format_id, name == 0 ? "" : name);
+
+        if (name != 0 &&
+                (ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_HTML) ||
+                 ohos_cliprdr_strcasecmp(name, "text/html") == 0))
         {
-            requested = CF_UNICODETEXT;
-            seen_text = 1;
+            cliprdr->remote_html_format = format_id;
         }
-        else if (!seen_text &&
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_URIW))
+        {
+            cliprdr->remote_uriw_format = format_id;
+        }
+        else if (name != 0 &&
+                 (ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_URI_LIST) ||
+                  ohos_cliprdr_strcasecmp(name, "UniformResourceLocator") == 0))
+        {
+            cliprdr->remote_uri_list_format = format_id;
+        }
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_IMAGE_BMP))
+        {
+            cliprdr->remote_image_bmp_format = format_id;
+            if (image_priority < 50)
+            {
+                image_format = format_id;
+                image_kind = OHOS_CLIPRDR_REQUEST_IMAGE_BMP;
+                image_priority = 50;
+            }
+        }
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_IMAGE_PNG))
+        {
+            cliprdr->remote_image_png_format = format_id;
+            image_format = format_id;
+            image_kind = OHOS_CLIPRDR_REQUEST_IMAGE_PNG;
+            image_priority = 100;
+        }
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_IMAGE_JPEG))
+        {
+            cliprdr->remote_image_jpeg_format = format_id;
+            if (image_priority < 90)
+            {
+                image_format = format_id;
+                image_kind = OHOS_CLIPRDR_REQUEST_IMAGE_JPEG;
+                image_priority = 90;
+            }
+        }
+        else if (name != 0 &&
+                 ohos_cliprdr_name_is(name, OHOS_CLIPRDR_FORMAT_IMAGE_WEBP))
+        {
+            cliprdr->remote_image_webp_format = format_id;
+            if (image_priority < 90)
+            {
+                image_format = format_id;
+                image_kind = OHOS_CLIPRDR_REQUEST_IMAGE_WEBP;
+                image_priority = 90;
+            }
+        }
+        else if (format_id == CF_DIB && image_priority < 80)
+        {
+            image_format = format_id;
+            image_kind = OHOS_CLIPRDR_REQUEST_DIB;
+            image_priority = 80;
+        }
+        else if (format_id == CF_UNICODETEXT)
+        {
+            text_format = CF_UNICODETEXT;
+        }
+        else if (text_format == 0 &&
                  (format_id == CF_TEXT || format_id == CF_OEMTEXT))
         {
-            requested = format_id;
+            text_format = format_id;
         }
+        g_free(name);
     }
 
     cliprdr->remote_format_lists_received++;
     (void)ohos_cliprdr_send_format_list_ok(cliprdr);
+    if (image_format != 0)
+    {
+        requested = image_format;
+        requested_kind = image_kind;
+    }
+    else if (cliprdr->remote_html_format != 0)
+    {
+        requested = cliprdr->remote_html_format;
+        requested_kind = OHOS_CLIPRDR_REQUEST_HTML;
+    }
+    else if (cliprdr->remote_uriw_format != 0)
+    {
+        requested = cliprdr->remote_uriw_format;
+        requested_kind = OHOS_CLIPRDR_REQUEST_URIW;
+    }
+    else if (cliprdr->remote_uri_list_format != 0)
+    {
+        requested = cliprdr->remote_uri_list_format;
+        requested_kind = OHOS_CLIPRDR_REQUEST_URI_LIST;
+    }
+    else if (text_format != 0)
+    {
+        requested = text_format;
+        requested_kind = OHOS_CLIPRDR_REQUEST_TEXT;
+    }
     if (requested != 0)
     {
-        return ohos_cliprdr_send_format_data_request(cliprdr, requested);
+        return ohos_cliprdr_send_format_data_request(cliprdr, requested,
+                                                     requested_kind);
     }
 
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: remote format list has no supported text format");
+        "xrdp.ohos.cliprdr: remote format list has no supported format");
     return 0;
 }
 
@@ -128,7 +166,12 @@ ohos_cliprdr_process_format_data_request(struct ohos_cliprdr *cliprdr,
 {
     int format_id = 0;
     char *text = 0;
-    int has_text;
+    char *html = 0;
+    char *plain = 0;
+    char *uri = 0;
+    char *data = 0;
+    int bytes = 0;
+    int ok = 0;
     int rv;
 
     if (!s_check_rem_and_log(s, 4, "OHOS cliprdr data request"))
@@ -136,18 +179,79 @@ ohos_cliprdr_process_format_data_request(struct ohos_cliprdr *cliprdr,
         return 1;
     }
     in_uint32_le(s, format_id);
-    has_text = (format_id == CF_UNICODETEXT ||
-                format_id == CF_TEXT ||
-                format_id == CF_OEMTEXT) &&
-               (ohos_cliprdr_pasteboard_read_plain_text(cliprdr, &text) == 0);
 
     cliprdr->local_requests_received++;
+    if (format_id == OHOS_CLIPRDR_FORMAT_HTML)
+    {
+        ok = ohos_cliprdr_pasteboard_read_html(cliprdr, &html, &plain) == 0;
+        if (ok)
+        {
+            data = ohos_cliprdr_html_to_ms_html(html, &bytes);
+        }
+    }
+    else if (format_id == OHOS_CLIPRDR_FORMAT_URIW)
+    {
+        ok = ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) == 0;
+        if (ok)
+        {
+            data = ohos_cliprdr_utf8_to_utf16le(uri, &bytes);
+        }
+    }
+    else if (format_id == OHOS_CLIPRDR_FORMAT_URI_LIST)
+    {
+        ok = ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) == 0;
+        if (ok)
+        {
+            data = ohos_cliprdr_uri_to_uri_list(uri, &bytes);
+        }
+    }
+    else if (format_id == CF_DIB ||
+             ohos_cliprdr_image_kind_from_format(format_id) !=
+             OHOS_CLIPRDR_REQUEST_NONE)
+    {
+        ok = ohos_cliprdr_read_local_image(cliprdr, format_id, &data,
+                                           &bytes) == 0;
+    }
+    else if (format_id == CF_UNICODETEXT ||
+             format_id == CF_TEXT ||
+             format_id == CF_OEMTEXT)
+    {
+        ok = ohos_cliprdr_pasteboard_read_plain_text(cliprdr, &text) == 0;
+        if (!ok && ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) == 0)
+        {
+            text = g_strdup(uri);
+            ok = text != 0;
+        }
+        if (!ok && ohos_cliprdr_pasteboard_read_html(cliprdr, &html,
+                                                     &plain) == 0)
+        {
+            text = g_strdup(plain != 0 && plain[0] != '\0' ? plain : html);
+            ok = text != 0;
+        }
+        if (ok && format_id == CF_UNICODETEXT)
+        {
+            data = ohos_cliprdr_utf8_to_utf16le(text, &bytes);
+        }
+        else if (ok)
+        {
+            bytes = g_strlen(text) + 1;
+            data = (char *)g_malloc(bytes, 1);
+            if (data != 0)
+            {
+                g_memcpy(data, text, bytes - 1);
+            }
+        }
+    }
+
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.cliprdr: remote requested local format=%d has_text=%d",
-        format_id, has_text);
-    rv = ohos_cliprdr_send_format_data_response(cliprdr, format_id,
-                                                has_text ? text : 0);
+        "xrdp.ohos.cliprdr: remote requested local format=%d bytes=%d ok=%d",
+        format_id, bytes, data != 0);
+    rv = ohos_cliprdr_send_format_data_response(cliprdr, data, bytes);
+    g_free(data);
     g_free(text);
+    g_free(html);
+    g_free(plain);
+    g_free(uri);
     return rv;
 }
 
@@ -157,10 +261,14 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
                                           int data_len)
 {
     char *text = 0;
+    char *html = 0;
+    char *uri = 0;
     int format_id = cliprdr->requested_format;
+    int request_kind = cliprdr->requested_kind;
     int rv = 0;
 
     cliprdr->requested_format = 0;
+    cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
     if ((msg_flags & CB_RESPONSE_FAIL) != 0)
     {
         LOG(LOG_LEVEL_INFO,
@@ -172,6 +280,55 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
                                               "OHOS cliprdr data response"))
     {
         return 1;
+    }
+
+    if (request_kind == OHOS_CLIPRDR_REQUEST_HTML)
+    {
+        html = ohos_cliprdr_extract_ms_html(s->p, data_len);
+        if (html != 0 && html[0] != '\0')
+        {
+            rv = ohos_cliprdr_pasteboard_write_html(cliprdr, html, 0);
+        }
+        g_free(html);
+        return rv;
+    }
+    if (request_kind == OHOS_CLIPRDR_REQUEST_URIW)
+    {
+        uri = ohos_cliprdr_utf16le_to_utf8(s->p, data_len);
+        if (uri != 0 && uri[0] != '\0')
+        {
+            rv = ohos_cliprdr_pasteboard_write_uri(cliprdr, uri);
+        }
+        g_free(uri);
+        return rv;
+    }
+    if (request_kind == OHOS_CLIPRDR_REQUEST_URI_LIST)
+    {
+        uri = ohos_cliprdr_extract_uri_list_first(s->p, data_len);
+        if (uri == 0)
+        {
+            uri = ohos_cliprdr_bytes_to_text(s->p, data_len);
+        }
+        if (uri != 0 && uri[0] != '\0')
+        {
+            rv = ohos_cliprdr_pasteboard_write_uri(cliprdr, uri);
+        }
+        g_free(uri);
+        return rv;
+    }
+    if (request_kind == OHOS_CLIPRDR_REQUEST_DIB ||
+            request_kind == OHOS_CLIPRDR_REQUEST_IMAGE_BMP ||
+            request_kind == OHOS_CLIPRDR_REQUEST_IMAGE_PNG ||
+            request_kind == OHOS_CLIPRDR_REQUEST_IMAGE_JPEG ||
+            request_kind == OHOS_CLIPRDR_REQUEST_IMAGE_WEBP)
+    {
+        rv = ohos_cliprdr_write_remote_image(cliprdr, request_kind,
+                                             s->p, data_len);
+        if (rv == 0)
+        {
+            cliprdr->remote_responses_received++;
+        }
+        return rv;
     }
 
     if (format_id == CF_UNICODETEXT)

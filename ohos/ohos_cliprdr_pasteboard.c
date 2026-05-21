@@ -42,8 +42,8 @@ ohos_cliprdr_pasteboard_status_name(int status)
     }
 }
 
-static OH_UdmfData *
-ohos_cliprdr_get_pasteboard_data(struct ohos_cliprdr *cliprdr,
+OH_UdmfData *
+ohos_cliprdr_pasteboard_get_data(struct ohos_cliprdr *cliprdr,
                                  const char *reason, int *status)
 {
     OH_UdmfData *data;
@@ -95,7 +95,7 @@ ohos_cliprdr_pasteboard_read_plain_text(struct ohos_cliprdr *cliprdr,
         return 1;
     }
 
-    data = ohos_cliprdr_get_pasteboard_data(cliprdr, "read plain text",
+    data = ohos_cliprdr_pasteboard_get_data(cliprdr, "read plain text",
                                             &status);
     if (status != ERR_OK || data == 0)
     {
@@ -163,6 +163,43 @@ ohos_cliprdr_pasteboard_read_plain_text(struct ohos_cliprdr *cliprdr,
 
     OH_UdmfData_Destroy(data);
     return 1;
+}
+
+void
+ohos_cliprdr_pasteboard_begin_remote_write(struct ohos_cliprdr *cliprdr)
+{
+    if (cliprdr == 0)
+    {
+        return;
+    }
+    if (ohos_cliprdr_lock(cliprdr) == 0)
+    {
+        cliprdr->ignore_local_changes++;
+        cliprdr->ignore_local_changes_until =
+            g_get_elapsed_ms() + OHOS_CLIPRDR_ECHO_SUPPRESS_MS;
+        ohos_cliprdr_unlock(cliprdr);
+    }
+}
+
+void
+ohos_cliprdr_pasteboard_cancel_remote_write(struct ohos_cliprdr *cliprdr)
+{
+    if (cliprdr == 0)
+    {
+        return;
+    }
+    if (ohos_cliprdr_lock(cliprdr) == 0)
+    {
+        if (cliprdr->ignore_local_changes > 0)
+        {
+            cliprdr->ignore_local_changes--;
+        }
+        if (cliprdr->ignore_local_changes == 0)
+        {
+            cliprdr->ignore_local_changes_until = 0;
+        }
+        ohos_cliprdr_unlock(cliprdr);
+    }
 }
 
 int

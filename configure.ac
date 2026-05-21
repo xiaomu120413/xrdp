@@ -92,8 +92,10 @@ if test "x$enable_ohos" = "xyes"; then
     [AC_MSG_ERROR([HarmonyOS Pasteboard header is required for --enable-ohos])])
   AC_CHECK_HEADER([database/udmf/udmf.h], [],
     [AC_MSG_ERROR([HarmonyOS UDMF header is required for --enable-ohos])])
+  AC_CHECK_HEADER([multimedia/image_framework/image/pixelmap_native.h], [],
+    [AC_MSG_ERROR([HarmonyOS PixelMap header is required for --enable-ohos])])
   XRDP_OHOS_LIBS="-lhilog_ndk.z"
-  XRDP_OHOS_BACKEND_LIBS="-lpasteboard -ludmf"
+  XRDP_OHOS_BACKEND_LIBS="-lpasteboard -ludmf -lohfileuri -limage_ndk.z -limage_source -lpixelmap_ndk.z -lpixelmap"
 fi
 AC_SUBST([XRDP_OHOS_LIBS])
 AC_SUBST([XRDP_OHOS_BACKEND_LIBS])

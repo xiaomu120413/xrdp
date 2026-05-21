@@ -17,6 +17,14 @@ struct ohos_cliprdr
     int capability_flags;
     int remote_capability_flags;
     int requested_format;
+    int requested_kind;
+    int remote_html_format;
+    int remote_uriw_format;
+    int remote_uri_list_format;
+    int remote_image_bmp_format;
+    int remote_image_png_format;
+    int remote_image_jpeg_format;
+    int remote_image_webp_format;
     struct stream *dechunker_s;
     OH_Pasteboard *pasteboard;
     OH_PasteboardObserver *observer;
