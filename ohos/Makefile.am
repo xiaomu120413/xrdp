@@ -23,7 +23,8 @@ module_LTLIBRARIES = \
   libxrdpohos.la
 
 libxrdpohos_la_SOURCES = \
-  ohos.c
+  ohos.c \
+  xrdp_ohos.h
 
 libxrdpohos_la_LIBADD = \
   $(top_builddir)/common/libcommon.la
