@@ -62,6 +62,7 @@ SUBDIRS = \
   libipm \
   libxrdp \
   $(PAINTERDIR) \
+  $(RFXCODECDIR) \
   ohos \
   xrdp \
   pkgconfig
