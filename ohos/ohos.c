@@ -300,25 +300,10 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
 }
 
 static int
-ohos_draw_test_frame(struct ohos_mod *self)
+ohos_clear_frame(struct ohos_mod *self, const char *reason)
 {
     struct mod *mod = &self->mod;
-    int tile;
-    int x;
-    int y;
-    int i;
     int rv = 0;
-    const int colors[] =
-    {
-        0x1f2933,
-        0x0ea5e9,
-        0x22c55e,
-        0xf59e0b,
-        0xef4444,
-        0xf8fafc,
-        0x111827,
-        0x6366f1
-    };
 
     if (self->width <= 0 || self->height <= 0 ||
             mod->server_begin_update == 0 || mod->server_end_update == 0)
@@ -326,34 +311,14 @@ ohos_draw_test_frame(struct ohos_mod *self)
         return 0;
     }
 
-    tile = ohos_min(self->width, self->height) / 8;
-    if (tile < 32)
-    {
-        tile = 32;
-    }
-
     rv |= mod->server_begin_update(mod);
-    rv |= ohos_fill_rect(mod, 0x0b1220, 0, 0, self->width, self->height);
-
-    for (y = 0; y < self->height; y += tile)
-    {
-        for (x = 0; x < self->width; x += tile)
-        {
-            i = ((x / tile) + (y / tile)) % (int)(sizeof(colors) / sizeof(colors[0]));
-            rv |= ohos_fill_rect(mod, colors[i], x, y,
-                                 ohos_min(tile - 2, self->width - x),
-                                 ohos_min(tile - 2, self->height - y));
-        }
-    }
-
-    rv |= ohos_fill_rect(mod, 0x000000, 0, 0, self->width, 4);
-    rv |= ohos_fill_rect(mod, 0x000000, 0, self->height - 4, self->width, 4);
-    rv |= ohos_fill_rect(mod, 0x000000, 0, 0, 4, self->height);
-    rv |= ohos_fill_rect(mod, 0x000000, self->width - 4, 0, 4, self->height);
+    rv |= ohos_fill_rect(mod, 0x000000, 0, 0, self->width, self->height);
     rv |= mod->server_end_update(mod);
 
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.frame: sent dummy frame %dx%d bpp=%d rv=%d",
-        self->width, self->height, self->bpp, rv);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.frame: cleared frame %dx%d bpp=%d rv=%d reason=%s",
+        self->width, self->height, self->bpp, rv,
+        reason == 0 ? "" : reason);
     return rv;
 }
 
@@ -367,7 +332,7 @@ ohos_mod_start(struct mod *mod, int width, int height, int bpp)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: start width=%d height=%d bpp=%d",
         width, height, bpp);
-    return ohos_draw_test_frame(self);
+    return ohos_clear_frame(self, "start waiting for external frame");
 }
 
 static int
@@ -392,7 +357,7 @@ ohos_mod_connect(struct mod *mod, int fd)
     {
         return rv;
     }
-    return ohos_draw_test_frame(self);
+    return ohos_clear_frame(self, "connect waiting for external frame");
 }
 
 static int
@@ -584,7 +549,7 @@ ohos_mod_server_monitor_resize(struct mod *mod,
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.resize: client resize %dx%d",
         width, height);
-    return ohos_draw_test_frame(self);
+    return ohos_clear_frame(self, "resize waiting for external frame");
 }
 
 static int
@@ -597,7 +562,7 @@ ohos_mod_server_monitor_full_invalidate(struct mod *mod,
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.resize: full invalidate %dx%d",
         width, height);
-    return ohos_draw_test_frame(self);
+    return ohos_clear_frame(self, "full invalidate waiting for external frame");
 }
 
 static int
