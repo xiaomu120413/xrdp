@@ -24,6 +24,7 @@ module_LTLIBRARIES = \
 
 libxrdpohos_la_SOURCES = \
   ohos.c \
+  ohos_backend_api.c \
   ohos_cliprdr_bitmap.c \
   ohos_cliprdr_channel.c \
   ohos_cliprdr.c \
@@ -41,6 +42,7 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_rich.c \
   ohos_cliprdr_transfer.c \
   ohos_display_geometry.c \
+  ohos_events.c \
   ohos_gfx_avc420.c \
   ohos_gfx_avc420.h \
   ohos_input.c \
@@ -54,6 +56,7 @@ libxrdpohos_la_SOURCES = \
   ohos_rdpsnd_private.h \
   ohos_rdpsnd_protocol.c \
   ohos_cliprdr.h \
+  ohos_private.h \
   xrdp_ohos.h
 
 libxrdpohos_la_LIBADD = \
