@@ -5,6 +5,7 @@
 
 #include "parse.h"
 
+typedef struct OH_PixelmapNative OH_PixelmapNative;
 typedef struct OH_UdmfData OH_UdmfData;
 
 #define OHOS_CLIPRDR_ECHO_SUPPRESS_MS 1500U
@@ -144,6 +145,25 @@ ohos_cliprdr_bgra_to_dib(const char *bgra, unsigned int width,
 
 char *
 ohos_cliprdr_dib_to_bmp(const char *dib, int dib_bytes, int *out_bytes);
+
+int
+ohos_cliprdr_decode_image_data_to_pixelmap(const char *data, int bytes,
+                                           OH_PixelmapNative **pixelmap,
+                                           unsigned int *width,
+                                           unsigned int *height);
+
+int
+ohos_cliprdr_decode_image_data_to_bgra(const char *data, int bytes,
+                                       char **bgra, unsigned int *width,
+                                       unsigned int *height);
+
+int
+ohos_cliprdr_decode_image_uri_to_bgra(const char *uri, char **bgra,
+                                      unsigned int *width,
+                                      unsigned int *height);
+
+int
+ohos_cliprdr_uri_decodes_as_image(const char *uri);
 
 int
 ohos_cliprdr_has_local_image(struct ohos_cliprdr *cliprdr, int *format_id);

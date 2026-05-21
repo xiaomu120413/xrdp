@@ -30,6 +30,7 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_formats.c \
   ohos_cliprdr_image.c \
   ohos_cliprdr_image_cache.c \
+  ohos_cliprdr_image_source.c \
   ohos_cliprdr_messages.c \
   ohos_cliprdr_pasteboard.c \
   ohos_cliprdr_private.h \
