@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <sys/mman.h>
+#include <time.h>
 
 #include "arch.h"
 #include "log.h"
@@ -22,6 +23,18 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #endif
+
+static uint64_t
+ohos_now_us(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    {
+        return 0;
+    }
+    return ((uint64_t)ts.tv_sec * 1000000ULL) + ((uint64_t)ts.tv_nsec / 1000ULL);
+}
 
 static int
 ohos_clip_u8(int value)
@@ -171,7 +184,8 @@ ohos_put_rect_wh(char **p, int left, int top, int width, int height)
 }
 
 static char *
-ohos_build_avc420_commands(int width, int height, int frame_id, int *bytes)
+ohos_build_avc420_commands_ex(int width, int height, int frame_id,
+                              int already_compressed, int *bytes)
 {
     const int start_bytes = 16;
     const int wire_bytes = 45;
@@ -195,7 +209,7 @@ ohos_build_avc420_commands(int width, int height, int frame_id, int *bytes)
     ohos_put_u16(&p, 0);
     ohos_put_u16(&p, XR_RDPGFX_CODECID_AVC420);
     ohos_put_u8(&p, XR_PIXEL_FORMAT_XRGB_8888);
-    ohos_put_u32(&p, 0);
+    ohos_put_u32(&p, already_compressed ? 1U : 0U);
     ohos_put_u16(&p, 1);
     ohos_put_rect_wh(&p, 0, 0, width, height);
     ohos_put_u16(&p, 1);
@@ -209,6 +223,274 @@ ohos_build_avc420_commands(int width, int height, int frame_id, int *bytes)
     return cmd;
 }
 
+static char *
+ohos_build_avc420_commands(int width, int height, int frame_id, int *bytes)
+{
+    return ohos_build_avc420_commands_ex(width, height, frame_id, 0, bytes);
+}
+
+static int
+ohos_copy_nv12(const char *nv12, int frame_width, int frame_height,
+               int stride, int width, int height, unsigned char *target)
+{
+    int y;
+    unsigned char *target_y;
+    unsigned char *target_uv;
+    const unsigned char *source_y;
+    const unsigned char *source_uv;
+
+    if (nv12 == 0 || target == 0 || frame_width < width ||
+            frame_height < height || stride < frame_width ||
+            width <= 0 || height <= 0 || (width & 1) != 0 ||
+            (height & 1) != 0)
+    {
+        return 1;
+    }
+
+    target_y = target;
+    target_uv = target + ((size_t)width * (size_t)height);
+    source_y = (const unsigned char *)nv12;
+    source_uv = source_y + ((size_t)stride * (size_t)frame_height);
+
+    for (y = 0; y < height; ++y)
+    {
+        g_memcpy(target_y + ((size_t)y * (size_t)width),
+                 source_y + ((size_t)y * (size_t)stride),
+                 width);
+    }
+
+    for (y = 0; y < height / 2; ++y)
+    {
+        g_memcpy(target_uv + ((size_t)y * (size_t)width),
+                 source_uv + ((size_t)y * (size_t)stride),
+                 width);
+    }
+
+    return 0;
+}
+
+int
+ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
+                                const char *nv12,
+                                int frame_width,
+                                int frame_height,
+                                int stride,
+                                int paint_width,
+                                int paint_height,
+                                int frame_id,
+                                uint64_t source_sequence,
+                                struct ohos_gfx_avc420_trace *trace)
+{
+    static int log_count = 0;
+    char *cmd;
+    int cmd_bytes = 0;
+    size_t y_bytes;
+    size_t data_bytes;
+    void *mapped;
+    uint64_t enter_us;
+    uint64_t copy_start_us;
+    uint64_t copy_done_us;
+    uint64_t enqueue_start_us;
+    uint64_t enqueue_done_us;
+    int rv;
+
+    enter_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->enter_us = enter_us;
+        trace->convert_done_us = 0;
+        trace->enqueue_done_us = 0;
+        trace->convert_us = 0;
+        trace->enqueue_us = 0;
+    }
+
+    if (mod == 0 || mod->server_egfx_cmd == 0 || nv12 == 0 ||
+            paint_width <= 0 || paint_height <= 0 ||
+            frame_width < paint_width || frame_height < paint_height ||
+            stride < frame_width ||
+            (paint_width & 1) != 0 || (paint_height & 1) != 0)
+    {
+        return 1;
+    }
+
+    y_bytes = (size_t)paint_width * (size_t)paint_height;
+    if (paint_height <= 0 || y_bytes / (size_t)paint_height != (size_t)paint_width ||
+            y_bytes > ((size_t)-1 / 3U) * 2U)
+    {
+        return 1;
+    }
+    data_bytes = y_bytes + (y_bytes / 2U);
+
+    mapped = mmap(0, data_bytes, PROT_READ | PROT_WRITE,
+                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mapped == MAP_FAILED)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.avc420: mmap failed size=%d",
+            (int)data_bytes);
+        return 1;
+    }
+
+    copy_start_us = ohos_now_us();
+    if (ohos_copy_nv12(nv12, frame_width, frame_height, stride,
+                       paint_width, paint_height,
+                       (unsigned char *)mapped) != 0)
+    {
+        munmap(mapped, data_bytes);
+        return 1;
+    }
+    copy_done_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->convert_done_us = copy_done_us;
+        if (copy_done_us >= copy_start_us)
+        {
+            trace->convert_us = (uint32_t)(copy_done_us - copy_start_us);
+        }
+    }
+
+    cmd = ohos_build_avc420_commands(paint_width, paint_height,
+                                     frame_id, &cmd_bytes);
+    if (cmd == 0)
+    {
+        munmap(mapped, data_bytes);
+        return 1;
+    }
+
+    enqueue_start_us = ohos_now_us();
+    rv = mod->server_egfx_cmd(mod, cmd, cmd_bytes, (char *)mapped,
+                              (int)data_bytes);
+    enqueue_done_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->enqueue_done_us = enqueue_done_us;
+        if (enqueue_done_us >= enqueue_start_us)
+        {
+            trace->enqueue_us = (uint32_t)(enqueue_done_us - enqueue_start_us);
+        }
+    }
+    g_free(cmd);
+
+    if (rv == 0)
+    {
+        log_count++;
+        if (log_count <= 3 || (log_count % 60) == 0)
+        {
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.avc420: queued NV12 frame id=%d source_seq=%llu size=%dx%d bytes=%d copy=%.3fms enqueue=%.3fms count=%d",
+                frame_id, (unsigned long long)source_sequence,
+                paint_width, paint_height, (int)data_bytes,
+                trace == 0 ? 0.0 : trace->convert_us / 1000.0,
+                trace == 0 ? 0.0 : trace->enqueue_us / 1000.0,
+                log_count);
+        }
+    }
+    else
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.avc420: server_egfx_cmd failed rv=%d frame=%d",
+            rv, frame_id);
+    }
+
+    return rv;
+}
+
+int
+ohos_gfx_send_avc420_h264_frame(struct mod *mod,
+                                const char *h264,
+                                int h264_bytes,
+                                int paint_width,
+                                int paint_height,
+                                int frame_id,
+                                uint64_t source_sequence,
+                                struct ohos_gfx_avc420_trace *trace)
+{
+    static int log_count = 0;
+    char *cmd;
+    int cmd_bytes = 0;
+    void *mapped;
+    uint64_t enter_us;
+    uint64_t copy_start_us;
+    uint64_t copy_done_us;
+    uint64_t enqueue_start_us;
+    uint64_t enqueue_done_us;
+    int rv;
+
+    enter_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->enter_us = enter_us;
+        trace->convert_done_us = 0;
+        trace->enqueue_done_us = 0;
+        trace->convert_us = 0;
+        trace->enqueue_us = 0;
+    }
+
+    if (mod == 0 || mod->server_egfx_cmd == 0 || h264 == 0 ||
+            h264_bytes <= 0 || paint_width <= 0 || paint_height <= 0 ||
+            (paint_width & 1) != 0 || (paint_height & 1) != 0)
+    {
+        return 1;
+    }
+
+    mapped = mmap(0, (size_t)h264_bytes, PROT_READ | PROT_WRITE,
+                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mapped == MAP_FAILED)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.avc420: h264 mmap failed size=%d",
+            h264_bytes);
+        return 1;
+    }
+
+    copy_start_us = ohos_now_us();
+    g_memcpy(mapped, h264, h264_bytes);
+    copy_done_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->convert_done_us = copy_done_us;
+        if (copy_done_us >= copy_start_us)
+        {
+            trace->convert_us = (uint32_t)(copy_done_us - copy_start_us);
+        }
+    }
+
+    cmd = ohos_build_avc420_commands_ex(paint_width, paint_height,
+                                        frame_id, 1, &cmd_bytes);
+    if (cmd == 0)
+    {
+        munmap(mapped, (size_t)h264_bytes);
+        return 1;
+    }
+
+    enqueue_start_us = ohos_now_us();
+    rv = mod->server_egfx_cmd(mod, cmd, cmd_bytes, (char *)mapped,
+                              h264_bytes);
+    enqueue_done_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->enqueue_done_us = enqueue_done_us;
+        if (enqueue_done_us >= enqueue_start_us)
+        {
+            trace->enqueue_us = (uint32_t)(enqueue_done_us - enqueue_start_us);
+        }
+    }
+    g_free(cmd);
+
+    log_count++;
+    if (rv == 0 && (log_count <= 5 || (log_count % 60) == 0))
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.avc420: queued pre-encoded H264 frame id=%d source_seq=%llu size=%dx%d bytes=%d copy=%.3fms enqueue=%.3fms count=%d",
+            frame_id, (unsigned long long)source_sequence,
+            paint_width, paint_height, h264_bytes,
+            trace != 0 ? trace->convert_us / 1000.0 : 0.0,
+            trace != 0 ? trace->enqueue_us / 1000.0 : 0.0,
+            log_count);
+    }
+    return rv;
+}
+
 int
 ohos_gfx_send_avc420_frame(struct mod *mod,
                            const char *bgra,
@@ -217,7 +499,8 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
                            int paint_width,
                            int paint_height,
                            int frame_id,
-                           uint64_t source_sequence)
+                           uint64_t source_sequence,
+                           struct ohos_gfx_avc420_trace *trace)
 {
     static int log_count = 0;
     char *cmd;
@@ -225,7 +508,22 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
     size_t y_bytes;
     size_t data_bytes;
     void *mapped;
+    uint64_t enter_us;
+    uint64_t convert_start_us;
+    uint64_t convert_done_us;
+    uint64_t enqueue_start_us;
+    uint64_t enqueue_done_us;
     int rv;
+
+    enter_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->enter_us = enter_us;
+        trace->convert_done_us = 0;
+        trace->enqueue_done_us = 0;
+        trace->convert_us = 0;
+        trace->enqueue_us = 0;
+    }
 
     if (mod == 0 || mod->server_egfx_cmd == 0 || bgra == 0 ||
             paint_width <= 0 || paint_height <= 0 ||
@@ -253,12 +551,22 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
         return 1;
     }
 
+    convert_start_us = ohos_now_us();
     if (ohos_bgra_to_nv12(bgra, frame_width, frame_height,
                           paint_width, paint_height,
                           (unsigned char *)mapped) != 0)
     {
         munmap(mapped, data_bytes);
         return 1;
+    }
+    convert_done_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->convert_done_us = convert_done_us;
+        if (convert_done_us >= convert_start_us)
+        {
+            trace->convert_us = (uint32_t)(convert_done_us - convert_start_us);
+        }
     }
 
     cmd = ohos_build_avc420_commands(paint_width, paint_height,
@@ -269,8 +577,18 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
         return 1;
     }
 
+    enqueue_start_us = ohos_now_us();
     rv = mod->server_egfx_cmd(mod, cmd, cmd_bytes, (char *)mapped,
                               (int)data_bytes);
+    enqueue_done_us = ohos_now_us();
+    if (trace != 0)
+    {
+        trace->enqueue_done_us = enqueue_done_us;
+        if (enqueue_done_us >= enqueue_start_us)
+        {
+            trace->enqueue_us = (uint32_t)(enqueue_done_us - enqueue_start_us);
+        }
+    }
     g_free(cmd);
 
     if (rv == 0)
@@ -279,9 +597,12 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
         if (log_count <= 3 || (log_count % 60) == 0)
         {
             LOG(LOG_LEVEL_INFO,
-                "xrdp.ohos.avc420: queued frame id=%d source_seq=%llu size=%dx%d bytes=%d count=%d",
+                "xrdp.ohos.avc420: queued frame id=%d source_seq=%llu size=%dx%d bytes=%d convert=%.3fms enqueue=%.3fms count=%d",
                 frame_id, (unsigned long long)source_sequence,
-                paint_width, paint_height, (int)data_bytes, log_count);
+                paint_width, paint_height, (int)data_bytes,
+                trace == 0 ? 0.0 : trace->convert_us / 1000.0,
+                trace == 0 ? 0.0 : trace->enqueue_us / 1000.0,
+                log_count);
         }
     }
     else

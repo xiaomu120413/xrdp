@@ -14,13 +14,38 @@
 #include "xrdp_constants.h"
 #include "xup.h"
 
-#include "ohos_cliprdr.h"
-#include "ohos_gfx_avc420.h"
+#include <time.h>
 
 #define XRDP_OHOS_API EXPORT_CC
+#include "ohos_cliprdr.h"
+#include "ohos_gfx_avc420.h"
+#include "ohos_rdpsnd.h"
 #include "xrdp_ohos.h"
 
 #define OHOS_MOUSE_LOG_SAMPLE 64
+#define OHOS_FRAME_TRACE_SLOTS 256
+
+struct ohos_frame_trace
+{
+    int valid;
+    int frame_id;
+    int format;
+    uint64_t source_sequence;
+    uint64_t capture_timestamp_us;
+    uint64_t capture_acquire_us;
+    uint64_t bridge_queue_us;
+    uint64_t submitter_enqueue_us;
+    uint64_t submitter_submit_us;
+    uint64_t submitter_copy_us;
+    uint64_t backend_submit_us;
+    uint64_t backend_copy_done_us;
+    uint64_t backend_pending_us;
+    uint64_t draw_start_us;
+    uint64_t gfx_convert_done_us;
+    uint64_t gfx_enqueue_done_us;
+    uint32_t gfx_convert_us;
+    uint32_t gfx_enqueue_us;
+};
 
 struct ohos_mod
 {
@@ -32,7 +57,19 @@ struct ohos_mod
     int mouse_move_count;
     int frame_draw_count;
     int frame_sequence;
+    int frame_format;
+    int frame_stride;
+    size_t frame_data_bytes;
     uint64_t frame_source_sequence;
+    uint64_t frame_capture_timestamp_us;
+    uint64_t frame_capture_acquire_us;
+    uint64_t frame_bridge_queue_us;
+    uint64_t frame_submitter_enqueue_us;
+    uint64_t frame_submitter_submit_us;
+    uint64_t frame_submitter_copy_us;
+    uint64_t frame_backend_submit_us;
+    uint64_t frame_backend_copy_done_us;
+    uint64_t frame_backend_pending_us;
     int frame_width;
     int frame_height;
     int frame_pending;
@@ -40,6 +77,8 @@ struct ohos_mod
     tintptr frame_wait_obj;
     char client_name[256];
     struct ohos_cliprdr cliprdr;
+    struct ohos_rdpsnd rdpsnd;
+    struct ohos_frame_trace frame_traces[OHOS_FRAME_TRACE_SLOTS];
 };
 
 static tbus g_ohos_frame_mutex = 0;
@@ -50,6 +89,18 @@ static xrdp_ohos_input_event_fn g_ohos_input_callback = 0;
 static void *g_ohos_input_callback_user = 0;
 static xrdp_ohos_backend_event_fn g_ohos_event_callback = 0;
 static void *g_ohos_event_callback_user = 0;
+
+static uint64_t
+ohos_now_us(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    {
+        return 0;
+    }
+    return ((uint64_t)ts.tv_sec * 1000000ULL) + ((uint64_t)ts.tv_nsec / 1000ULL);
+}
 
 static int
 ohos_ensure_frame_mutex(void)
@@ -117,6 +168,129 @@ ohos_from_mod(struct mod *mod)
     return (struct ohos_mod *)mod;
 }
 
+static const char *
+ohos_frame_format_name(int format)
+{
+    switch (format)
+    {
+        case XRDP_OHOS_FRAME_FORMAT_BGRA_8888:
+            return "bgra";
+        case XRDP_OHOS_FRAME_FORMAT_RGBA_8888:
+            return "rgba";
+        case XRDP_OHOS_FRAME_FORMAT_NV12:
+            return "nv12";
+        case XRDP_OHOS_FRAME_FORMAT_H264_AVC420:
+            return "h264-avc420";
+        default:
+            return "unknown";
+    }
+}
+
+static uint64_t
+ohos_delta_us(uint64_t later, uint64_t earlier)
+{
+    if (later == 0 || earlier == 0 || later < earlier)
+    {
+        return 0;
+    }
+    return later - earlier;
+}
+
+static struct ohos_frame_trace *
+ohos_trace_slot(struct ohos_mod *self, int frame_id)
+{
+    if (self == 0 || frame_id <= 0)
+    {
+        return 0;
+    }
+    return &self->frame_traces[(unsigned int)frame_id % OHOS_FRAME_TRACE_SLOTS];
+}
+
+static void
+ohos_store_frame_trace_locked(struct ohos_mod *self)
+{
+    struct ohos_frame_trace *trace;
+
+    if (self == 0 || self->frame_sequence <= 0)
+    {
+        return;
+    }
+
+    trace = ohos_trace_slot(self, self->frame_sequence);
+    if (trace == 0)
+    {
+        return;
+    }
+
+    trace->valid = 1;
+    trace->frame_id = self->frame_sequence;
+    trace->format = self->frame_format;
+    trace->source_sequence = self->frame_source_sequence;
+    trace->capture_timestamp_us = self->frame_capture_timestamp_us;
+    trace->capture_acquire_us = self->frame_capture_acquire_us;
+    trace->bridge_queue_us = self->frame_bridge_queue_us;
+    trace->submitter_enqueue_us = self->frame_submitter_enqueue_us;
+    trace->submitter_submit_us = self->frame_submitter_submit_us;
+    trace->submitter_copy_us = self->frame_submitter_copy_us;
+    trace->backend_submit_us = self->frame_backend_submit_us;
+    trace->backend_copy_done_us = self->frame_backend_copy_done_us;
+    trace->backend_pending_us = self->frame_backend_pending_us;
+    trace->draw_start_us = 0;
+    trace->gfx_convert_done_us = 0;
+    trace->gfx_enqueue_done_us = 0;
+    trace->gfx_convert_us = 0;
+    trace->gfx_enqueue_us = 0;
+}
+
+static int
+ohos_lookup_frame_trace(struct ohos_mod *self, int frame_id,
+                        struct ohos_frame_trace *out_trace)
+{
+    struct ohos_frame_trace *trace;
+
+    if (self == 0 || out_trace == 0 || ohos_lock_frame_state() != 0)
+    {
+        return 0;
+    }
+
+    trace = ohos_trace_slot(self, frame_id);
+    if (trace != 0 && trace->valid && trace->frame_id == frame_id)
+    {
+        *out_trace = *trace;
+        ohos_unlock_frame_state();
+        return 1;
+    }
+
+    ohos_unlock_frame_state();
+    return 0;
+}
+
+static void
+ohos_update_gfx_trace(struct ohos_mod *self, int frame_id, int format,
+                      uint64_t draw_start_us,
+                      const struct ohos_gfx_avc420_trace *gfx_trace)
+{
+    struct ohos_frame_trace *trace;
+
+    if (self == 0 || gfx_trace == 0 || ohos_lock_frame_state() != 0)
+    {
+        return;
+    }
+
+    trace = ohos_trace_slot(self, frame_id);
+    if (trace != 0 && trace->valid && trace->frame_id == frame_id)
+    {
+        trace->format = format;
+        trace->draw_start_us = draw_start_us;
+        trace->gfx_convert_done_us = gfx_trace->convert_done_us;
+        trace->gfx_enqueue_done_us = gfx_trace->enqueue_done_us;
+        trace->gfx_convert_us = gfx_trace->convert_us;
+        trace->gfx_enqueue_us = gfx_trace->enqueue_us;
+    }
+
+    ohos_unlock_frame_state();
+}
+
 static void
 ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
                          tbus param2, tbus param3, tbus param4)
@@ -160,6 +334,8 @@ ohos_forward_backend_event(struct ohos_mod *self, int type, int suppress,
     xrdp_ohos_backend_event_fn callback;
     void *user_data;
     struct xrdp_ohos_backend_event event;
+    struct ohos_frame_trace trace;
+    int has_trace = 0;
 
     if (self == 0 || ohos_lock_input_state() != 0)
     {
@@ -188,6 +364,19 @@ ohos_forward_backend_event(struct ohos_mod *self, int type, int suppress,
     event.bottom = bottom;
     event.frame_id = frame_id;
     event.flags = flags;
+    event.source_sequence = 0;
+    event.capture_acquire_us = 0;
+    event.ack_us = 0;
+    if (type == XRDP_OHOS_BACKEND_EVENT_FRAME_ACK)
+    {
+        has_trace = ohos_lookup_frame_trace(self, frame_id, &trace);
+        if (has_trace)
+        {
+            event.source_sequence = trace.source_sequence;
+            event.capture_acquire_us = trace.capture_acquire_us;
+        }
+        event.ack_us = ohos_now_us();
+    }
     callback(&event, user_data);
 }
 
@@ -224,6 +413,9 @@ ohos_discard_pending_frame(struct ohos_mod *self)
     self->frame_pending = 0;
     self->frame_width = 0;
     self->frame_height = 0;
+    self->frame_format = 0;
+    self->frame_stride = 0;
+    self->frame_data_bytes = 0;
     ohos_unlock_frame_state();
 
     if (data != 0)
@@ -239,8 +431,21 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     char *data = 0;
     int frame_width = 0;
     int frame_height = 0;
+    int frame_format = 0;
+    int frame_stride = 0;
+    size_t frame_data_bytes = 0;
     int sequence = 0;
     uint64_t source_sequence = 0;
+    uint64_t capture_acquire_us = 0;
+    uint64_t bridge_queue_us = 0;
+    uint64_t submitter_enqueue_us = 0;
+    uint64_t submitter_submit_us = 0;
+    uint64_t submitter_copy_us = 0;
+    uint64_t backend_submit_us = 0;
+    uint64_t backend_copy_done_us = 0;
+    uint64_t backend_pending_us = 0;
+    uint64_t draw_start_us;
+    struct ohos_gfx_avc420_trace gfx_trace;
     int paint_width;
     int paint_height;
     int rv = 0;
@@ -264,10 +469,22 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
         data = self->frame_data;
         frame_width = self->frame_width;
         frame_height = self->frame_height;
+        frame_format = self->frame_format;
+        frame_stride = self->frame_stride;
+        frame_data_bytes = self->frame_data_bytes;
         sequence = self->frame_sequence;
         source_sequence = self->frame_source_sequence;
+        capture_acquire_us = self->frame_capture_acquire_us;
+        bridge_queue_us = self->frame_bridge_queue_us;
+        submitter_enqueue_us = self->frame_submitter_enqueue_us;
+        submitter_submit_us = self->frame_submitter_submit_us;
+        submitter_copy_us = self->frame_submitter_copy_us;
+        backend_submit_us = self->frame_backend_submit_us;
+        backend_copy_done_us = self->frame_backend_copy_done_us;
+        backend_pending_us = self->frame_backend_pending_us;
         self->frame_data = 0;
         self->frame_pending = 0;
+        self->frame_data_bytes = 0;
     }
 
     ohos_unlock_frame_state();
@@ -291,21 +508,63 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
         return 0;
     }
 
-    if (ohos_gfx_send_avc420_frame(mod, data, frame_width, frame_height,
-                                   paint_width, paint_height, sequence,
-                                   source_sequence) == 0)
+    draw_start_us = ohos_now_us();
+    if ((frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 &&
+            ohos_gfx_send_avc420_h264_frame(mod, data,
+                                            (int)frame_data_bytes,
+                                            paint_width, paint_height,
+                                            sequence, source_sequence,
+                                            &gfx_trace) == 0) ||
+            (frame_format == XRDP_OHOS_FRAME_FORMAT_NV12 &&
+            ohos_gfx_send_avc420_nv12_frame(mod, data, frame_width,
+                                            frame_height, frame_stride,
+                                            paint_width, paint_height,
+                                            sequence, source_sequence,
+                                            &gfx_trace) == 0) ||
+            (frame_format != XRDP_OHOS_FRAME_FORMAT_NV12 &&
+             frame_format != XRDP_OHOS_FRAME_FORMAT_H264_AVC420 &&
+             ohos_gfx_send_avc420_frame(mod, data, frame_width, frame_height,
+                                        paint_width, paint_height, sequence,
+                                        source_sequence, &gfx_trace) == 0))
     {
+        ohos_update_gfx_trace(self, sequence, frame_format, draw_start_us,
+                              &gfx_trace);
         self->frame_draw_count++;
         if (self->frame_draw_count <= 3 ||
                 (self->frame_draw_count % 30) == 0)
         {
             LOG(LOG_LEVEL_INFO,
-                "xrdp.ohos.frame: queued AVC420 frame seq=%d source_seq=%llu size=%dx%d dst=%dx%d",
-                sequence, (unsigned long long)source_sequence, frame_width,
-                frame_height, paint_width, paint_height);
+                "xrdp.ohos.frame: queued AVC420 frame seq=%d source_seq=%llu pixel=%s size=%dx%d dst=%dx%d bytes=%d",
+                sequence, (unsigned long long)source_sequence,
+                ohos_frame_format_name(frame_format), frame_width, frame_height,
+                paint_width, paint_height, (int)frame_data_bytes);
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.e2e: enqueue frame=%d source_seq=%llu capture_to_bridge=%.3fms bridge_to_submitter=%.3fms submitter_copy=%.3fms submitter_to_backend=%.3fms backend_copy=%.3fms backend_to_draw=%.3fms avc420_copy_or_convert=%.3fms avc420_enqueue=%.3fms pixel=%s",
+                sequence, (unsigned long long)source_sequence,
+                ohos_delta_us(bridge_queue_us, capture_acquire_us) / 1000.0,
+                ohos_delta_us(submitter_enqueue_us, bridge_queue_us) / 1000.0,
+                submitter_copy_us / 1000.0,
+                ohos_delta_us(backend_submit_us, submitter_submit_us) / 1000.0,
+                ohos_delta_us(backend_copy_done_us, backend_submit_us) / 1000.0,
+                ohos_delta_us(draw_start_us, backend_pending_us) / 1000.0,
+                gfx_trace.convert_us / 1000.0,
+                gfx_trace.enqueue_us / 1000.0,
+                ohos_frame_format_name(frame_format));
         }
         g_free(data);
         return 0;
+    }
+
+    if (frame_format == XRDP_OHOS_FRAME_FORMAT_NV12 ||
+            frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.frame: AVC420 enqueue failed seq=%d source_seq=%llu pixel=%s size=%dx%d bytes=%d",
+            sequence, (unsigned long long)source_sequence,
+            ohos_frame_format_name(frame_format), frame_width, frame_height,
+            (int)frame_data_bytes);
+        g_free(data);
+        return 1;
     }
 
     rv |= mod->server_begin_update(mod);
@@ -390,6 +649,7 @@ ohos_mod_connect(struct mod *mod, int fd)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT,
                                0, 0, 0, 0, 0, 0, 0);
@@ -458,9 +718,16 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
             break;
 
         case WM_CHANNEL_DATA:
-            return ohos_cliprdr_process_channel_data(&self->cliprdr,
-                                                     param1, param2,
-                                                     param3, param4);
+        {
+            int rv = 0;
+            rv |= ohos_rdpsnd_process_channel_data(&self->rdpsnd,
+                                                   param1, param2,
+                                                   param3, param4);
+            rv |= ohos_cliprdr_process_channel_data(&self->cliprdr,
+                                                    param1, param2,
+                                                    param3, param4);
+            return rv;
+        }
 
         default:
             LOG(LOG_LEVEL_DEBUG,
@@ -485,6 +752,7 @@ ohos_mod_end(struct mod *mod)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
     self->connected = 0;
+    ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
     if (ohos_lock_frame_state() == 0)
     {
@@ -551,6 +819,7 @@ ohos_mod_check_wait_objs(struct mod *mod)
         g_reset_wait_obj(self->frame_wait_obj);
         rv |= ohos_draw_external_frame(self, 0);
     }
+    rv |= ohos_rdpsnd_check_wait_objs(&self->rdpsnd);
     rv |= ohos_cliprdr_check_wait_objs(&self->cliprdr);
     return rv;
 }
@@ -558,9 +827,41 @@ ohos_mod_check_wait_objs(struct mod *mod)
 static int
 ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
 {
+    static int ack_count = 0;
+    struct ohos_mod *self = ohos_from_mod(mod);
+    struct ohos_frame_trace trace;
+    uint64_t ack_us;
+    int has_trace;
+
     LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.frame: ack flags=0x%8.8x frame_id=%d",
         flags, frame_id);
-    ohos_forward_backend_event(ohos_from_mod(mod), XRDP_OHOS_BACKEND_EVENT_FRAME_ACK,
+    ack_us = ohos_now_us();
+    has_trace = ohos_lookup_frame_trace(self, frame_id, &trace);
+    ack_count++;
+    if (has_trace && (ack_count <= 5 || (ack_count % 60) == 0))
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.e2e: ack frame=%d source_seq=%llu total_from_acquire=%.3fms bridge=%.3fms submitter_wait=%.3fms submitter_copy=%.3fms backend_wait=%.3fms backend_copy=%.3fms draw_wait=%.3fms avc420_copy_or_convert=%.3fms avc420_enqueue=%.3fms encode_and_client_ack=%.3fms flags=0x%8.8x pixel=%s",
+            frame_id, (unsigned long long)trace.source_sequence,
+            ohos_delta_us(ack_us, trace.capture_acquire_us) / 1000.0,
+            ohos_delta_us(trace.bridge_queue_us, trace.capture_acquire_us) / 1000.0,
+            ohos_delta_us(trace.submitter_submit_us, trace.submitter_enqueue_us) / 1000.0,
+            trace.submitter_copy_us / 1000.0,
+            ohos_delta_us(trace.backend_submit_us, trace.submitter_submit_us) / 1000.0,
+            ohos_delta_us(trace.backend_copy_done_us, trace.backend_submit_us) / 1000.0,
+            ohos_delta_us(trace.draw_start_us, trace.backend_pending_us) / 1000.0,
+            trace.gfx_convert_us / 1000.0,
+            trace.gfx_enqueue_us / 1000.0,
+            ohos_delta_us(ack_us, trace.gfx_enqueue_done_us) / 1000.0,
+            flags, ohos_frame_format_name(trace.format));
+    }
+    else if (!has_trace && (ack_count <= 5 || (ack_count % 60) == 0))
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.e2e: ack frame=%d has no trace flags=0x%8.8x",
+            frame_id, flags);
+    }
+    ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_FRAME_ACK,
                                0, 0, 0, 0, 0, frame_id, flags);
     return 0;
 }
@@ -634,6 +935,7 @@ mod_init(void)
     ohos_ensure_frame_mutex();
     self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
+    ohos_rdpsnd_init(&self->rdpsnd, &self->mod, self->frame_wait_obj);
     self->mod.size = sizeof(struct mod);
     self->mod.version = XRDP_OHOS_MOD_VERSION;
     self->mod.handle = (tintptr)self;
@@ -674,6 +976,7 @@ mod_exit(tintptr handle)
         }
         ohos_discard_pending_frame(self);
         ohos_cliprdr_deinit(&self->cliprdr);
+        ohos_rdpsnd_deinit(&self->rdpsnd);
         if (self->frame_wait_obj != 0)
         {
             g_delete_wait_obj(self->frame_wait_obj);
@@ -692,8 +995,13 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
     tintptr wait_obj = 0;
     int row;
     int row_bytes;
+    int stored_format;
     size_t packed_bytes;
+    uint64_t backend_submit_us;
+    uint64_t backend_copy_done_us;
+    uint64_t backend_pending_us;
 
+    backend_submit_us = ohos_now_us();
     if (frame == 0 || frame->data == 0 || frame->width <= 0 ||
             frame->height <= 0 ||
             frame->width > XRDP_OHOS_FRAME_MAX_DIMENSION ||
@@ -703,15 +1011,44 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
     }
 
     if (frame->format != XRDP_OHOS_FRAME_FORMAT_BGRA_8888 &&
-            frame->format != XRDP_OHOS_FRAME_FORMAT_RGBA_8888)
+            frame->format != XRDP_OHOS_FRAME_FORMAT_RGBA_8888 &&
+            frame->format != XRDP_OHOS_FRAME_FORMAT_NV12)
     {
         return XRDP_OHOS_BACKEND_STATUS_UNSUPPORTED_FORMAT;
     }
 
-    row_bytes = frame->width * 4;
-    packed_bytes = (size_t)row_bytes * (size_t)frame->height;
-    if (frame->stride < row_bytes ||
-            packed_bytes / (size_t)frame->height != (size_t)row_bytes)
+    if (frame->format == XRDP_OHOS_FRAME_FORMAT_NV12)
+    {
+        size_t y_bytes;
+
+        if ((frame->width & 1) != 0 || (frame->height & 1) != 0 ||
+                frame->stride < frame->width)
+        {
+            return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
+        }
+        row_bytes = frame->width;
+        y_bytes = (size_t)frame->width * (size_t)frame->height;
+        if (y_bytes / (size_t)frame->height != (size_t)frame->width ||
+                y_bytes > ((size_t)-1 / 3U) * 2U)
+        {
+            return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
+        }
+        packed_bytes = y_bytes + (y_bytes / 2U);
+        stored_format = XRDP_OHOS_FRAME_FORMAT_NV12;
+    }
+    else
+    {
+        row_bytes = frame->width * 4;
+        packed_bytes = (size_t)row_bytes * (size_t)frame->height;
+        if (frame->stride < row_bytes ||
+                packed_bytes / (size_t)frame->height != (size_t)row_bytes)
+        {
+            return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
+        }
+        stored_format = XRDP_OHOS_FRAME_FORMAT_BGRA_8888;
+    }
+
+    if (packed_bytes == 0)
     {
         return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
     }
@@ -722,32 +1059,57 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
         return XRDP_OHOS_BACKEND_STATUS_NO_MEMORY;
     }
 
-    for (row = 0; row < frame->height; row++)
+    if (frame->format == XRDP_OHOS_FRAME_FORMAT_NV12)
     {
-        const char *source;
-        char *target_row;
+        const char *source_y = (const char *)frame->data;
+        const char *source_uv = source_y +
+                                ((size_t)frame->stride * (size_t)frame->height);
+        char *target_y = packed;
+        char *target_uv = packed + ((size_t)frame->width * (size_t)frame->height);
 
-        source = ((const char *)frame->data) +
-                 ((size_t)row * (size_t)frame->stride);
-        target_row = packed + ((size_t)row * (size_t)row_bytes);
-        if (frame->format == XRDP_OHOS_FRAME_FORMAT_BGRA_8888)
+        for (row = 0; row < frame->height; row++)
         {
-            g_memcpy(target_row, source, row_bytes);
+            g_memcpy(target_y + ((size_t)row * (size_t)frame->width),
+                     source_y + ((size_t)row * (size_t)frame->stride),
+                     frame->width);
         }
-        else
+        for (row = 0; row < frame->height / 2; row++)
         {
-            int x;
-            for (x = 0; x < frame->width; x++)
+            g_memcpy(target_uv + ((size_t)row * (size_t)frame->width),
+                     source_uv + ((size_t)row * (size_t)frame->stride),
+                     frame->width);
+        }
+    }
+    else
+    {
+        for (row = 0; row < frame->height; row++)
+        {
+            const char *source;
+            char *target_row;
+
+            source = ((const char *)frame->data) +
+                     ((size_t)row * (size_t)frame->stride);
+            target_row = packed + ((size_t)row * (size_t)row_bytes);
+            if (frame->format == XRDP_OHOS_FRAME_FORMAT_BGRA_8888)
             {
-                const char *src = source + (x * 4);
-                char *dst = target_row + (x * 4);
-                dst[0] = src[2];
-                dst[1] = src[1];
-                dst[2] = src[0];
-                dst[3] = src[3];
+                g_memcpy(target_row, source, row_bytes);
+            }
+            else
+            {
+                int x;
+                for (x = 0; x < frame->width; x++)
+                {
+                    const char *src = source + (x * 4);
+                    char *dst = target_row + (x * 4);
+                    dst[0] = src[2];
+                    dst[1] = src[1];
+                    dst[2] = src[0];
+                    dst[3] = src[3];
+                }
             }
         }
     }
+    backend_copy_done_us = ohos_now_us();
 
     if (ohos_lock_frame_state() != 0)
     {
@@ -767,9 +1129,23 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
     target->frame_data = packed;
     target->frame_width = frame->width;
     target->frame_height = frame->height;
+    target->frame_format = stored_format;
+    target->frame_stride = row_bytes;
+    target->frame_data_bytes = packed_bytes;
     target->frame_source_sequence = frame->source_sequence;
+    target->frame_capture_timestamp_us = frame->capture_timestamp_us;
+    target->frame_capture_acquire_us = frame->capture_acquire_us;
+    target->frame_bridge_queue_us = frame->bridge_queue_us;
+    target->frame_submitter_enqueue_us = frame->submitter_enqueue_us;
+    target->frame_submitter_submit_us = frame->submitter_submit_us;
+    target->frame_submitter_copy_us = frame->submitter_copy_us;
+    target->frame_backend_submit_us = backend_submit_us;
+    target->frame_backend_copy_done_us = backend_copy_done_us;
     target->frame_sequence = ++g_ohos_frame_sequence;
+    backend_pending_us = ohos_now_us();
+    target->frame_backend_pending_us = backend_pending_us;
     target->frame_pending = 1;
+    ohos_store_frame_trace_locked(target);
     wait_obj = target->frame_wait_obj;
     ohos_unlock_frame_state();
 
@@ -786,11 +1162,127 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
 }
 
 int EXPORT_CC
+xrdp_ohos_backend_submit_encoded_frame(
+    const struct xrdp_ohos_encoded_frame *frame)
+{
+    struct ohos_mod *target;
+    char *packed;
+    char *old_data = 0;
+    tintptr wait_obj = 0;
+    uint64_t backend_submit_us;
+    uint64_t backend_copy_done_us;
+    uint64_t backend_pending_us;
+
+    backend_submit_us = ohos_now_us();
+    if (frame == 0 || frame->data == 0 || frame->bytes <= 0 ||
+            frame->width <= 0 || frame->height <= 0 ||
+            frame->width > XRDP_OHOS_FRAME_MAX_DIMENSION ||
+            frame->height > XRDP_OHOS_FRAME_MAX_DIMENSION ||
+            frame->format != XRDP_OHOS_ENCODED_FRAME_FORMAT_H264_AVC420)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
+    }
+
+    packed = (char *)g_malloc(frame->bytes, 0);
+    if (packed == 0)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_NO_MEMORY;
+    }
+    g_memcpy(packed, frame->data, frame->bytes);
+    backend_copy_done_us = ohos_now_us();
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        g_free(packed);
+        return XRDP_OHOS_BACKEND_STATUS_LOCK_FAILED;
+    }
+
+    target = g_ohos_active_mod;
+    if (target == 0 || !target->connected)
+    {
+        ohos_unlock_frame_state();
+        g_free(packed);
+        return XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
+    }
+
+    old_data = target->frame_data;
+    target->frame_data = packed;
+    target->frame_width = frame->width;
+    target->frame_height = frame->height;
+    target->frame_format = XRDP_OHOS_FRAME_FORMAT_H264_AVC420;
+    target->frame_stride = frame->bytes;
+    target->frame_data_bytes = (size_t)frame->bytes;
+    target->frame_source_sequence = frame->source_sequence;
+    target->frame_capture_timestamp_us = frame->capture_timestamp_us;
+    target->frame_capture_acquire_us = frame->capture_acquire_us;
+    target->frame_bridge_queue_us = frame->bridge_queue_us;
+    target->frame_submitter_enqueue_us = frame->encoder_output_us;
+    target->frame_submitter_submit_us = frame->encoder_output_us;
+    target->frame_submitter_copy_us =
+        (backend_copy_done_us >= backend_submit_us) ?
+        (backend_copy_done_us - backend_submit_us) : 0;
+    target->frame_backend_submit_us = backend_submit_us;
+    target->frame_backend_copy_done_us = backend_copy_done_us;
+    target->frame_sequence = ++g_ohos_frame_sequence;
+    backend_pending_us = ohos_now_us();
+    target->frame_backend_pending_us = backend_pending_us;
+    target->frame_pending = 1;
+    ohos_store_frame_trace_locked(target);
+    wait_obj = target->frame_wait_obj;
+    ohos_unlock_frame_state();
+
+    if (old_data != 0)
+    {
+        g_free(old_data);
+    }
+    if (wait_obj != 0)
+    {
+        g_set_wait_obj(wait_obj);
+    }
+
+    return XRDP_OHOS_BACKEND_STATUS_OK;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_submit_audio_frame(
+    const struct xrdp_ohos_audio_frame *frame)
+{
+    struct ohos_mod *target;
+    int rv;
+
+    if (frame == 0 || frame->data == 0 ||
+            frame->bytes <= 0 || frame->bytes > XRDP_OHOS_AUDIO_MAX_BYTES)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_INVALID_FRAME;
+    }
+    if (frame->format != XRDP_OHOS_AUDIO_FORMAT_PCM_S16LE)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_UNSUPPORTED_FORMAT;
+    }
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_LOCK_FAILED;
+    }
+
+    target = g_ohos_active_mod;
+    if (target == 0 || !target->connected)
+    {
+        ohos_unlock_frame_state();
+        return XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
+    }
+    rv = ohos_rdpsnd_submit_audio(&target->rdpsnd, frame);
+    ohos_unlock_frame_state();
+    return rv;
+}
+
+int EXPORT_CC
 xrdp_ohos_backend_submit_bgra_frame(const void *data, int width, int height,
                                     int stride)
 {
     struct xrdp_ohos_frame frame;
 
+    g_memset(&frame, 0, sizeof(frame));
     frame.data = data;
     frame.width = width;
     frame.height = height;

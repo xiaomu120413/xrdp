@@ -42,6 +42,11 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_transfer.c \
   ohos_gfx_avc420.c \
   ohos_gfx_avc420.h \
+  ohos_rdpsnd.c \
+  ohos_rdpsnd_channel.c \
+  ohos_rdpsnd.h \
+  ohos_rdpsnd_private.h \
+  ohos_rdpsnd_protocol.c \
   ohos_cliprdr.h \
   xrdp_ohos.h
 

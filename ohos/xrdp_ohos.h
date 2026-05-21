@@ -14,8 +14,9 @@ extern "C"
 
 #define XRDP_OHOS_MOD_VERSION 4
 #define XRDP_OHOS_INPUT_EVENT_VERSION 1
-#define XRDP_OHOS_BACKEND_EVENT_VERSION 1
+#define XRDP_OHOS_BACKEND_EVENT_VERSION 2
 #define XRDP_OHOS_FRAME_MAX_DIMENSION 8192
+#define XRDP_OHOS_AUDIO_MAX_BYTES 131072
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -55,7 +56,19 @@ enum xrdp_ohos_backend_status
 enum xrdp_ohos_frame_format
 {
     XRDP_OHOS_FRAME_FORMAT_BGRA_8888 = 1,
-    XRDP_OHOS_FRAME_FORMAT_RGBA_8888 = 2
+    XRDP_OHOS_FRAME_FORMAT_RGBA_8888 = 2,
+    XRDP_OHOS_FRAME_FORMAT_NV12 = 3,
+    XRDP_OHOS_FRAME_FORMAT_H264_AVC420 = 4
+};
+
+enum xrdp_ohos_encoded_frame_format
+{
+    XRDP_OHOS_ENCODED_FRAME_FORMAT_H264_AVC420 = 1
+};
+
+enum xrdp_ohos_audio_format
+{
+    XRDP_OHOS_AUDIO_FORMAT_PCM_S16LE = 1
 };
 
 enum xrdp_ohos_backend_event_type
@@ -76,6 +89,37 @@ struct xrdp_ohos_frame
     int stride;
     int format;
     uint64_t source_sequence;
+    uint64_t capture_timestamp_us;
+    uint64_t capture_acquire_us;
+    uint64_t bridge_queue_us;
+    uint64_t submitter_enqueue_us;
+    uint64_t submitter_submit_us;
+    uint64_t submitter_copy_us;
+};
+
+struct xrdp_ohos_audio_frame
+{
+    const void *data;
+    int bytes;
+    int sample_rate;
+    int channels;
+    int bits_per_sample;
+    int format;
+    uint64_t source_timestamp;
+};
+
+struct xrdp_ohos_encoded_frame
+{
+    const void *data;
+    int bytes;
+    int width;
+    int height;
+    int format;
+    uint64_t source_sequence;
+    uint64_t capture_timestamp_us;
+    uint64_t capture_acquire_us;
+    uint64_t bridge_queue_us;
+    uint64_t encoder_output_us;
 };
 
 struct xrdp_ohos_input_event
@@ -107,6 +151,9 @@ struct xrdp_ohos_backend_event
     int bottom;
     int frame_id;
     int flags;
+    uint64_t source_sequence;
+    uint64_t capture_acquire_us;
+    uint64_t ack_us;
 };
 
 typedef void (*xrdp_ohos_input_event_fn)(
@@ -116,6 +163,14 @@ typedef void (*xrdp_ohos_backend_event_fn)(
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame);
+
+XRDP_OHOS_API int
+xrdp_ohos_backend_submit_encoded_frame(
+    const struct xrdp_ohos_encoded_frame *frame);
+
+XRDP_OHOS_API int
+xrdp_ohos_backend_submit_audio_frame(
+    const struct xrdp_ohos_audio_frame *frame);
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_submit_bgra_frame(const void *data, int width, int height,

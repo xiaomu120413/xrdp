@@ -30,6 +30,9 @@
 #include "xrdp_egfx.h"
 #include "string_calls.h"
 
+#include <stdint.h>
+#include <time.h>
+
 #ifdef XRDP_RFXCODEC
 #include "rfxcodec_encode.h"
 #endif
@@ -58,6 +61,18 @@
 
 #define XRDP_SURCMD_PREFIX_BYTES 256
 #define OUT_DATA_BYTES_DEFAULT_SIZE (16 * 1024 * 1024)
+
+static uint64_t
+xrdp_encoder_now_us(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    {
+        return 0;
+    }
+    return ((uint64_t)ts.tv_sec * 1000000ULL) + ((uint64_t)ts.tv_nsec / 1000ULL);
+}
 
 #ifdef XRDP_RFXCODEC
 /*
@@ -816,10 +831,11 @@ gfx_send_done(struct xrdp_encoder *self, XRDP_ENC_DATA *enc,
 static struct stream *
 gfx_wiretosurface1(struct xrdp_encoder *self,
                    struct xrdp_egfx_bulk *bulk, struct stream *in_s,
-                   XRDP_ENC_DATA *enc)
+                   XRDP_ENC_DATA *enc, int frame_id)
 {
 #if defined(XRDP_X264) || defined(XRDP_OPENH264) || \
         defined(XRDP_OHOS_AVCODEC)
+    static int log_count = 0;
     int index;
     int surface_id;
     int codec_id;
@@ -845,6 +861,8 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
     struct xrdp_enc_gfx_cmd *enc_gfx_cmd = &(enc->u.gfx);
     int mon_index;
     int connection_type;
+    uint64_t encode_start_us = 0;
+    uint64_t encode_done_us = 0;
 
     connection_type = self->mm->wm->client_info->mcs_connection_type;
 
@@ -983,6 +1001,7 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
             return NULL;
         }
         bitmap_data_length = s_rem_out(s);
+        encode_start_us = xrdp_encoder_now_us();
         if (self->codec_handle_h264_gfx[mon_index] == NULL)
         {
             self->codec_handle_h264_gfx[mon_index] =
@@ -1002,9 +1021,21 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
                     crects, num_rects_c,
                     s->p, &bitmap_data_length,
                     connection_type, NULL);
+        encode_done_us = xrdp_encoder_now_us();
         if (error == 0)
         {
             xstream_seek(s, bitmap_data_length);
+            log_count++;
+            if (log_count <= 5 || (log_count % 60) == 0)
+            {
+                LOG(LOG_LEVEL_INFO,
+                    "xrdp.encoder.e2e: encode output frame=%d codec=AVC420/H264 size=%dx%d nv12=%d h264=%d encode=%.3fms count=%d",
+                    frame_id, width, height, enc_gfx_cmd->data_bytes,
+                    bitmap_data_length,
+                    (encode_done_us >= encode_start_us) ?
+                        (encode_done_us - encode_start_us) / 1000.0 : 0.0,
+                    log_count);
+            }
         }
         else
         {
@@ -1027,6 +1058,7 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
     (void)bulk;
     (void)in_s;
     (void)enc;
+    (void)frame_id;
     return NULL;
 #endif
 }
@@ -1319,7 +1351,8 @@ gfx_deletesurface(struct xrdp_encoder *self,
 /*****************************************************************************/
 static struct stream *
 gfx_startframe(struct xrdp_encoder *self,
-               struct xrdp_egfx_bulk *bulk, struct stream *in_s)
+               struct xrdp_egfx_bulk *bulk, struct stream *in_s,
+               int *aframe_id)
 {
     int frame_id;
     int time_stamp;
@@ -1330,6 +1363,10 @@ gfx_startframe(struct xrdp_encoder *self,
     }
     in_uint32_le(in_s, frame_id);
     in_uint32_le(in_s, time_stamp);
+    if (aframe_id != NULL)
+    {
+        *aframe_id = frame_id;
+    }
     return xrdp_egfx_frame_start(bulk, frame_id, time_stamp);
 }
 
@@ -1421,6 +1458,7 @@ process_enc_egfx(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     int cmd_id;
     int cmd_bytes;
     int frame_id;
+    int active_frame_id;
     int got_frame_id;
     int error;
     char *holdp;
@@ -1432,6 +1470,7 @@ process_enc_egfx(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
     in_s.size = enc->u.gfx.cmd_bytes;
     in_s.p = in_s.data;
     in_s.end = in_s.data + in_s.size;
+    active_frame_id = 0;
     while (s_check_rem(&in_s, 8))
     {
         s = NULL;
@@ -1451,7 +1490,7 @@ process_enc_egfx(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
         switch (cmd_id)
         {
             case XR_RDPGFX_CMDID_WIRETOSURFACE_1:       /* 0x0001 */
-                s = gfx_wiretosurface1(self, bulk, &in_s, enc);
+                s = gfx_wiretosurface1(self, bulk, &in_s, enc, active_frame_id);
                 break;
             case XR_RDPGFX_CMDID_WIRETOSURFACE_2:       /* 0x0002 */
                 s = gfx_wiretosurface2(self, bulk, &in_s, enc);
@@ -1469,7 +1508,7 @@ process_enc_egfx(struct xrdp_encoder *self, XRDP_ENC_DATA *enc)
                 s = gfx_deletesurface(self, bulk, &in_s);
                 break;
             case XR_RDPGFX_CMDID_STARTFRAME:            /* 0x000B */
-                s = gfx_startframe(self, bulk, &in_s);
+                s = gfx_startframe(self, bulk, &in_s, &active_frame_id);
                 break;
             case XR_RDPGFX_CMDID_ENDFRAME:              /* 0x000C */
                 s = gfx_endframe(self, bulk, &in_s, &frame_id);

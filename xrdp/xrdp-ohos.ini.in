@@ -30,7 +30,7 @@ EnableProcessId=true
 
 [Channels]
 rdpdr=false
-rdpsnd=false
+rdpsnd=true
 drdynvc=true
 cliprdr=true
 rail=false

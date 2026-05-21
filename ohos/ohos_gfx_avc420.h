@@ -5,6 +5,15 @@
 
 struct mod;
 
+struct ohos_gfx_avc420_trace
+{
+    uint64_t enter_us;
+    uint64_t convert_done_us;
+    uint64_t enqueue_done_us;
+    uint32_t convert_us;
+    uint32_t enqueue_us;
+};
+
 int
 ohos_gfx_send_avc420_frame(struct mod *mod,
                            const char *bgra,
@@ -13,6 +22,29 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
                            int paint_width,
                            int paint_height,
                            int frame_id,
-                           uint64_t source_sequence);
+                           uint64_t source_sequence,
+                           struct ohos_gfx_avc420_trace *trace);
+
+int
+ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
+                                const char *nv12,
+                                int frame_width,
+                                int frame_height,
+                                int stride,
+                                int paint_width,
+                                int paint_height,
+                                int frame_id,
+                                uint64_t source_sequence,
+                                struct ohos_gfx_avc420_trace *trace);
+
+int
+ohos_gfx_send_avc420_h264_frame(struct mod *mod,
+                                const char *h264,
+                                int h264_bytes,
+                                int paint_width,
+                                int paint_height,
+                                int frame_id,
+                                uint64_t source_sequence,
+                                struct ohos_gfx_avc420_trace *trace);
 
 #endif
