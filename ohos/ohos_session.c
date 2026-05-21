@@ -1,0 +1,147 @@
+/**
+ * HarmonyOS backend session counters and summary logging.
+ */
+
+#if defined(HAVE_CONFIG_H)
+#include "config_ac.h"
+#endif
+
+#include "arch.h"
+#include "log.h"
+
+#include <time.h>
+
+#include "ohos_private.h"
+
+uint64_t
+ohos_now_us(void)
+{
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+    {
+        return 0;
+    }
+    return ((uint64_t)ts.tv_sec * 1000000ULL) + ((uint64_t)ts.tv_nsec / 1000ULL);
+}
+
+const char *
+ohos_frame_format_name(int format)
+{
+    switch (format)
+    {
+        case XRDP_OHOS_FRAME_FORMAT_BGRA_8888:
+            return "bgra";
+        case XRDP_OHOS_FRAME_FORMAT_RGBA_8888:
+            return "rgba";
+        case XRDP_OHOS_FRAME_FORMAT_NV12:
+            return "nv12";
+        case XRDP_OHOS_FRAME_FORMAT_H264_AVC420:
+            return "h264-avc420";
+        default:
+            return "unknown";
+    }
+}
+
+uint64_t
+ohos_delta_us(uint64_t later, uint64_t earlier)
+{
+    if (later == 0 || earlier == 0 || later < earlier)
+    {
+        return 0;
+    }
+    return later - earlier;
+}
+
+void
+ohos_reset_session_stats(struct ohos_mod *self)
+{
+    if (self == 0)
+    {
+        return;
+    }
+
+    self->session_start_us = ohos_now_us();
+    self->key_event_count = 0;
+    self->key_sync_event_count = 0;
+    self->mouse_move_event_count = 0;
+    self->mouse_button_event_count = 0;
+    self->input_forwarded_count = 0;
+    self->channel_data_event_count = 0;
+    self->frame_ack_count = 0;
+    self->suppress_output_count = 0;
+    self->monitor_resize_count = 0;
+    self->monitor_full_invalidate_count = 0;
+    self->raw_frame_submit_count = 0;
+    self->h264_frame_submit_count = 0;
+    self->audio_frame_submit_count = 0;
+    self->audio_bytes_submitted = 0;
+    self->mouse_move_count = 0;
+    self->frame_draw_count = 0;
+    self->h264_drop_count = 0;
+    self->h264_waiting_for_sync = 0;
+}
+
+void
+ohos_log_session_summary(struct ohos_mod *self, const char *reason)
+{
+    uint64_t now_us;
+    uint64_t duration_ms = 0;
+    int h264_queue_count = 0;
+    int h264_drop_count = 0;
+    int h264_waiting_for_sync = 0;
+
+    if (self == 0)
+    {
+        return;
+    }
+
+    now_us = ohos_now_us();
+    if (now_us >= self->session_start_us)
+    {
+        duration_ms = (now_us - self->session_start_us) / 1000ULL;
+    }
+    if (ohos_lock_frame_state() == 0)
+    {
+        h264_queue_count = self->h264_queue_count;
+        h264_drop_count = self->h264_drop_count;
+        h264_waiting_for_sync = self->h264_waiting_for_sync;
+        ohos_unlock_frame_state();
+    }
+
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.session: summary reason=%s client=%s duration_ms=%llu size=%dx%d bpp=%d frames_drawn=%d raw_submitted=%llu h264_submitted=%llu h264_queue=%d h264_dropped=%d h264_waiting_sync=%d",
+        reason == 0 ? "" : reason, self->client_name,
+        (unsigned long long)duration_ms, self->width, self->height, self->bpp,
+        self->frame_draw_count,
+        (unsigned long long)self->raw_frame_submit_count,
+        (unsigned long long)self->h264_frame_submit_count,
+        h264_queue_count, h264_drop_count, h264_waiting_for_sync);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.session: input keys=%llu key_sync=%llu mouse_move=%llu mouse_button=%llu forwarded=%llu channel_data=%llu frame_ack=%llu suppress=%llu resize=%llu full_invalidate=%llu",
+        (unsigned long long)self->key_event_count,
+        (unsigned long long)self->key_sync_event_count,
+        (unsigned long long)self->mouse_move_event_count,
+        (unsigned long long)self->mouse_button_event_count,
+        (unsigned long long)self->input_forwarded_count,
+        (unsigned long long)self->channel_data_event_count,
+        (unsigned long long)self->frame_ack_count,
+        (unsigned long long)self->suppress_output_count,
+        (unsigned long long)self->monitor_resize_count,
+        (unsigned long long)self->monitor_full_invalidate_count);
+    ohos_input_log_summary(&self->input, reason);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.session: rdpsnd submitted=%u sent_chunks=%u sent_bytes=%u dropped=%d errors=%u app_audio_frames=%llu app_audio_bytes=%llu cliprdr local_lists=%u remote_lists=%u local_requests=%u remote_responses=%u pb_reads=%u pb_writes=%u pb_changes=%u suppressed=%u errors=%u",
+        self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,
+        self->rdpsnd.sent_bytes, self->rdpsnd.dropped_buffers,
+        self->rdpsnd.errors,
+        (unsigned long long)self->audio_frame_submit_count,
+        (unsigned long long)self->audio_bytes_submitted,
+        self->cliprdr.local_format_lists_sent,
+        self->cliprdr.remote_format_lists_received,
+        self->cliprdr.local_requests_received,
+        self->cliprdr.remote_responses_received,
+        self->cliprdr.pasteboard_reads, self->cliprdr.pasteboard_writes,
+        self->cliprdr.pasteboard_changes,
+        self->cliprdr.suppressed_changes, self->cliprdr.errors);
+}

@@ -46,6 +46,7 @@ libxrdpohos_la_SOURCES = \
   ohos_frame.c \
   ohos_gfx_avc420.c \
   ohos_gfx_avc420.h \
+  ohos_session.c \
   ohos_input.c \
   ohos_input_auth.c \
   ohos_input.h \

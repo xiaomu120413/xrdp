@@ -139,6 +139,12 @@ uint64_t
 ohos_delta_us(uint64_t later, uint64_t earlier);
 
 void
+ohos_reset_session_stats(struct ohos_mod *self);
+
+void
+ohos_log_session_summary(struct ohos_mod *self, const char *reason);
+
+void
 ohos_free_h264_frame(struct ohos_queued_h264_frame *frame);
 
 void
