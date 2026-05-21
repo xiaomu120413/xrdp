@@ -15,6 +15,8 @@
 #include "xup.h"
 
 #define OHOS_MOD_VER 4
+#define OHOS_EVENT_SESSION_CONNECT 0
+#define OHOS_EVENT_SESSION_DISCONNECT -1
 #define OHOS_MOUSE_LOG_SAMPLE 64
 #define OHOS_FRAME_MAX_DIMENSION 8192
 #define OHOS_INPUT_EVENT_VERSION 1
@@ -384,6 +386,7 @@ ohos_mod_connect(struct mod *mod, int fd)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    ohos_forward_input_event(self, OHOS_EVENT_SESSION_CONNECT, 0, 0, 0, 0);
     rv = ohos_draw_external_frame(self, &painted);
     if (painted)
     {
@@ -485,6 +488,7 @@ ohos_mod_end(struct mod *mod)
         ohos_unlock_frame_state();
     }
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: end");
+    ohos_forward_input_event(self, OHOS_EVENT_SESSION_DISCONNECT, 0, 0, 0, 0);
     return 0;
 }
 
