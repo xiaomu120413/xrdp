@@ -42,8 +42,82 @@
 #define LOGINTERNALSTUFF
 #include "log.h"
 
+enum
+{
+    XRDP_SYSLOG_LOG_CRIT = LOG_CRIT,
+    XRDP_SYSLOG_LOG_ERR = LOG_ERR,
+    XRDP_SYSLOG_LOG_WARNING = LOG_WARNING,
+    XRDP_SYSLOG_LOG_INFO = LOG_INFO,
+    XRDP_SYSLOG_LOG_DEBUG = LOG_DEBUG
+};
+
+#if defined(XRDP_OHOS)
+#undef LOG_INFO
+#undef LOG_DEBUG
+#include <hilog/log.h>
+#endif
+
 /* Here we store the current state and configuration of the log */
 static struct log_config *g_staticLogConfig = NULL;
+
+#if defined(XRDP_OHOS)
+#define XRDP_OHOS_LOG_DOMAIN 0xF3D2
+#define XRDP_OHOS_LOG_TAG "xrdp"
+#define XRDP_OHOS_HILOG_MAX_LINE 3500
+
+static LogLevel
+internal_log_xrdp2ohos(const enum logLevels lvl)
+{
+    switch (lvl)
+    {
+        case LOG_LEVEL_ALWAYS:
+        case LOG_LEVEL_ERROR:
+            return LOG_ERROR;
+        case LOG_LEVEL_WARNING:
+            return LOG_WARN;
+        case LOG_LEVEL_INFO:
+            return LOG_INFO;
+        case LOG_LEVEL_DEBUG:
+        case LOG_LEVEL_TRACE:
+            return LOG_DEBUG;
+        default:
+            return LOG_DEBUG;
+    }
+}
+
+static void
+internal_log_ohos_print(const enum logLevels lvl, const char *message)
+{
+    char line[XRDP_OHOS_HILOG_MAX_LINE + 1];
+    int len;
+
+    if (message == NULL)
+    {
+        message = "";
+    }
+
+    len = g_strlen(message);
+    while (len > 0 && (message[len - 1] == '\n' || message[len - 1] == '\r'))
+    {
+        --len;
+    }
+
+    if (len > XRDP_OHOS_HILOG_MAX_LINE)
+    {
+        len = XRDP_OHOS_HILOG_MAX_LINE;
+    }
+
+    if (len > 0)
+    {
+        g_memcpy(line, message, len);
+    }
+    line[len] = '\0';
+
+    (void)OH_LOG_Print(LOG_APP, internal_log_xrdp2ohos(lvl),
+                       XRDP_OHOS_LOG_DOMAIN, XRDP_OHOS_LOG_TAG,
+                       "%{public}s", line);
+}
+#endif
 
 /* This file first start with all private functions.
    In the end of the file the public functions is defined */
@@ -94,19 +168,19 @@ internal_log_xrdp2syslog(const enum logLevels lvl)
     switch (lvl)
     {
         case LOG_LEVEL_ALWAYS:
-            return LOG_CRIT;
+            return XRDP_SYSLOG_LOG_CRIT;
         case LOG_LEVEL_ERROR:
-            return LOG_ERR;
+            return XRDP_SYSLOG_LOG_ERR;
         case LOG_LEVEL_WARNING:
-            return LOG_WARNING;
+            return XRDP_SYSLOG_LOG_WARNING;
         case LOG_LEVEL_INFO:
-            return LOG_INFO;
+            return XRDP_SYSLOG_LOG_INFO;
         case LOG_LEVEL_DEBUG:
         case LOG_LEVEL_TRACE:
-            return LOG_DEBUG;
+            return XRDP_SYSLOG_LOG_DEBUG;
         default:
             g_writeln("Undefined log level - programming error");
-            return LOG_DEBUG;
+            return XRDP_SYSLOG_LOG_DEBUG;
     }
 }
 
@@ -176,6 +250,10 @@ internal_log_start(struct log_config *l_cfg)
 
         if (-1 == l_cfg->fd)
         {
+#if defined(XRDP_OHOS)
+            internal_log_ohos_print(LOG_LEVEL_ERROR,
+                                    "xrdp log file open failed during HiLog bridge startup");
+#endif
             return LOG_ERROR_FILE_OPEN;
         }
     }
@@ -189,6 +267,11 @@ internal_log_start(struct log_config *l_cfg)
 #ifdef LOG_ENABLE_THREAD
     pthread_mutexattr_init(&(l_cfg->log_lock_attr));
     pthread_mutex_init(&(l_cfg->log_lock), &(l_cfg->log_lock_attr));
+#endif
+
+#if defined(XRDP_OHOS)
+    internal_log_ohos_print(LOG_LEVEL_INFO,
+                            "XRDP_HILOG_BRIDGE_READY xrdp log initialized");
 #endif
 
     return LOG_STARTUP_OK;
@@ -584,8 +667,16 @@ internal_log_is_enabled_for_level(const enum logLevels log_level,
              && !g_staticLogConfig->enable_syslog
              && !g_staticLogConfig->enable_console)
     {
+#if defined(XRDP_OHOS)
+        if (override_destination_level)
+        {
+            return log_level <= override_log_level;
+        }
+        return log_level <= g_staticLogConfig->log_level;
+#else
         /* all logging outputs are disabled */
         return 0;
+#endif
     }
     else if (override_destination_level)
     {
@@ -1029,12 +1120,14 @@ internal_log_message(const enum logLevels lvl,
         return LOG_ERROR_NO_CFG;
     }
 
+#if !defined(XRDP_OHOS)
     if (0 > g_staticLogConfig->fd
             && g_staticLogConfig->enable_syslog == 0
             && g_staticLogConfig->enable_console == 0)
     {
         return LOG_ERROR_FILE_NOT_OPEN;
     }
+#endif
 
     if (!internal_log_is_enabled_for_level(lvl, override_destination_level, override_log_level))
     {
@@ -1093,6 +1186,10 @@ internal_log_message(const enum logLevels lvl,
         /* log to console */
         g_printf("%s", buff);
     }
+
+#if defined(XRDP_OHOS)
+    internal_log_ohos_print(lvl, buff);
+#endif
 
     if ((override_destination_level && lvl <= override_log_level)
             || (!override_destination_level && lvl <= g_staticLogConfig->log_level))

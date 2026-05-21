@@ -98,4 +98,5 @@ libcommon_la_SOURCES = \
 libcommon_la_LIBADD = \
   -lpthread \
   $(OPENSSL_LIBS) \
+  $(XRDP_OHOS_LIBS) \
   $(DLOPEN_LIBS)

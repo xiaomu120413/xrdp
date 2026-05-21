@@ -82,9 +82,14 @@ AC_ARG_ENABLE(ohos, AS_HELP_STRING([--enable-ohos],
               [Build a minimal HarmonyOS server front end without Linux/X11 session modules (default: no)]),
               [], [enable_ohos=no])
 AM_CONDITIONAL(XRDP_OHOS, [test x$enable_ohos = xyes])
+XRDP_OHOS_LIBS=
 if test "x$enable_ohos" = "xyes"; then
   AC_DEFINE([XRDP_OHOS], 1, [Build a minimal HarmonyOS server front end])
+  AC_CHECK_HEADER([hilog/log.h], [],
+    [AC_MSG_ERROR([HarmonyOS HiLog header hilog/log.h is required for --enable-ohos])])
+  XRDP_OHOS_LIBS="-lhilog_ndk.z"
 fi
+AC_SUBST([XRDP_OHOS_LIBS])
 
 AC_ARG_ENABLE(tests,
               AS_HELP_STRING([--enable-tests],
@@ -645,7 +650,7 @@ AC_SUBST([sysconfsubdir], [$with_sysconfsubdir])
 
 PKG_INSTALLDIR
 
-AC_CHECK_HEADERS([sys/prctl.h uchar.h])
+AC_CHECK_HEADERS([stdint.h sys/prctl.h uchar.h])
 
 AC_CONFIG_FILES([
   common/Makefile
