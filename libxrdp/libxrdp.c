@@ -31,6 +31,21 @@
 #define MAX_BITMAP_BUF_SIZE (16 * 1024) /* 16K */
 #define TS_MONITOR_ATTRIBUTES_SIZE 20 /* [MS-RDPBCGR] 2.2.1.3.9 */
 
+static const char *
+libxrdp_get_cfg_path(void)
+{
+#if defined(XRDP_OHOS)
+    const char *value = g_getenv("XRDP_CFG_PATH");
+
+    if (value != NULL && value[0] != '\0')
+    {
+        return value;
+    }
+#endif
+
+    return XRDP_CFG_PATH;
+}
+
 /******************************************************************************/
 struct xrdp_session *EXPORT_CC
 libxrdp_init(struct xrdp_process *id, struct trans *trans, const char *xrdp_ini)
@@ -46,7 +61,10 @@ libxrdp_init(struct xrdp_process *id, struct trans *trans, const char *xrdp_ini)
     }
     else
     {
-        session->xrdp_ini = g_strdup(XRDP_CFG_PATH "/xrdp.ini");
+        char default_xrdp_ini[256];
+        g_snprintf(default_xrdp_ini, sizeof(default_xrdp_ini), "%s/xrdp.ini",
+                   libxrdp_get_cfg_path());
+        session->xrdp_ini = g_strdup(default_xrdp_ini);
     }
     session->rdp = xrdp_rdp_create(session, trans);
     session->orders = xrdp_orders_create(session, session->rdp);

@@ -29,6 +29,37 @@
 #include "log.h"
 #include "string_calls.h"
 
+static const char *
+xrdp_sec_get_cfg_path(void)
+{
+#if defined(XRDP_OHOS)
+    const char *value = g_getenv("XRDP_CFG_PATH");
+
+    if (value != NULL && value[0] != '\0')
+    {
+        return value;
+    }
+#endif
+
+    return XRDP_CFG_PATH;
+}
+
+static void
+xrdp_sec_make_cfg_path(char *out, int out_len, const char *name)
+{
+    const char *base = xrdp_sec_get_cfg_path();
+    const int base_len = g_strlen(base);
+
+    if (base_len > 0 && base[base_len - 1] == '/')
+    {
+        g_snprintf(out, out_len, "%s%s", base, name);
+    }
+    else
+    {
+        g_snprintf(out, out_len, "%s/%s", base, name);
+    }
+}
+
 /* some compilers need unsigned char to avoid warnings */
 static tui8 g_pad_54[40] =
 {
@@ -2432,7 +2463,7 @@ xrdp_sec_incoming(struct xrdp_sec *self)
             items->auto_free = 1;
             values = list_create();
             values->auto_free = 1;
-            g_snprintf(key_file, 255, "%s/rsakeys.ini", XRDP_CFG_PATH);
+            xrdp_sec_make_cfg_path(key_file, sizeof(key_file), "rsakeys.ini");
 
             if (file_by_name_read_section(key_file, "keys", items, values) != 0)
             {

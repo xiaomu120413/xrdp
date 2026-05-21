@@ -33,6 +33,36 @@
 #include <freerdp/constants.h>
 #endif
 
+static const char *
+xrdp_rdp_get_cfg_path(void)
+{
+#if defined(XRDP_OHOS)
+    const char *value = g_getenv("XRDP_CFG_PATH");
+
+    if (value != NULL && value[0] != '\0')
+    {
+        return value;
+    }
+#endif
+
+    return XRDP_CFG_PATH;
+}
+
+static void
+xrdp_rdp_make_cfg_path(char *out, int out_len, const char *name)
+{
+    const char *base = xrdp_rdp_get_cfg_path();
+    const int base_len = g_strlen(base);
+
+    if (base_len > 0 && base[base_len - 1] == '/')
+    {
+        g_snprintf(out, out_len, "%s%s", base, name);
+    }
+    else
+    {
+        g_snprintf(out, out_len, "%s/%s", base, name);
+    }
+}
 
 
 #define FASTPATH_FRAG_SIZE (16 * 1024 - 128)
@@ -221,7 +251,9 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
             if (g_strlen(value) == 0)
             {
                 /* default certificate path */
-                g_snprintf(client_info->certificate, 1023, "%s/cert.pem", XRDP_CFG_PATH);
+                xrdp_rdp_make_cfg_path(client_info->certificate,
+                                       sizeof(client_info->certificate),
+                                       "cert.pem");
                 LOG(LOG_LEVEL_INFO,
                     "Using default X.509 certificate: %s",
                     client_info->certificate);
@@ -230,7 +262,9 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
             else if (value[0] != '/')
             {
                 /* default certificate path */
-                g_snprintf(client_info->certificate, 1023, "%s/cert.pem", XRDP_CFG_PATH);
+                xrdp_rdp_make_cfg_path(client_info->certificate,
+                                       sizeof(client_info->certificate),
+                                       "cert.pem");
                 LOG(LOG_LEVEL_WARNING,
                     "X.509 certificate should use absolute path, using "
                     "default instead: %s", client_info->certificate);
@@ -253,14 +287,18 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
             if (g_strlen(value) == 0)
             {
                 /* default key_file path */
-                g_snprintf(client_info->key_file, 1023, "%s/key.pem", XRDP_CFG_PATH);
+                xrdp_rdp_make_cfg_path(client_info->key_file,
+                                       sizeof(client_info->key_file),
+                                       "key.pem");
                 LOG(LOG_LEVEL_INFO, "Using default X.509 key file: %s",
                     client_info->key_file);
             }
             else if (value[0] != '/')
             {
                 /* default key_file path */
-                g_snprintf(client_info->key_file, 1023, "%s/key.pem", XRDP_CFG_PATH);
+                xrdp_rdp_make_cfg_path(client_info->key_file,
+                                       sizeof(client_info->key_file),
+                                       "key.pem");
                 LOG(LOG_LEVEL_WARNING,
                     "X.509 key file should use absolute path, using "
                     "default instead: %s", client_info->key_file);
@@ -1697,4 +1735,3 @@ xrdp_rdp_send_session_info(struct xrdp_rdp *self, const char *data,
     free_stream(s);
     return 0;
 }
-
