@@ -9,12 +9,14 @@
 #include "arch.h"
 #include "os_calls.h"
 #include "string_calls.h"
+#include "thread_calls.h"
 #include "log.h"
 #include "xrdp_constants.h"
 #include "xup.h"
 
 #define OHOS_MOD_VER 4
 #define OHOS_MOUSE_LOG_SAMPLE 64
+#define OHOS_FRAME_MAX_DIMENSION 8192
 
 struct ohos_mod
 {
@@ -24,8 +26,53 @@ struct ohos_mod
     int bpp;
     int connected;
     int mouse_move_count;
+    int frame_draw_count;
+    int frame_sequence;
+    int frame_width;
+    int frame_height;
+    int frame_pending;
+    char *frame_data;
+    tintptr frame_wait_obj;
     char client_name[256];
 };
+
+static tbus g_ohos_frame_mutex = 0;
+static struct ohos_mod *g_ohos_active_mod = 0;
+static int g_ohos_frame_sequence = 0;
+
+int EXPORT_CC
+xrdp_ohos_backend_submit_bgra_frame(const void *data, int width, int height,
+                                    int stride);
+
+static int
+ohos_ensure_frame_mutex(void)
+{
+    if (g_ohos_frame_mutex == 0)
+    {
+        g_ohos_frame_mutex = tc_mutex_create();
+    }
+    return g_ohos_frame_mutex != 0;
+}
+
+static int
+ohos_lock_frame_state(void)
+{
+    if (!ohos_ensure_frame_mutex())
+    {
+        return 1;
+    }
+    return tc_mutex_lock(g_ohos_frame_mutex);
+}
+
+static int
+ohos_unlock_frame_state(void)
+{
+    if (g_ohos_frame_mutex == 0)
+    {
+        return 1;
+    }
+    return tc_mutex_unlock(g_ohos_frame_mutex);
+}
 
 static struct ohos_mod *
 ohos_from_mod(struct mod *mod)
@@ -49,6 +96,115 @@ ohos_fill_rect(struct mod *mod, int color, int x, int y, int cx, int cy)
 
     mod->server_set_fgcolor(mod, color);
     return mod->server_fill_rect(mod, x, y, cx, cy);
+}
+
+static void
+ohos_discard_pending_frame(struct ohos_mod *self)
+{
+    char *data = 0;
+
+    if (self == 0 || ohos_lock_frame_state() != 0)
+    {
+        return;
+    }
+
+    data = self->frame_data;
+    self->frame_data = 0;
+    self->frame_pending = 0;
+    self->frame_width = 0;
+    self->frame_height = 0;
+    ohos_unlock_frame_state();
+
+    if (data != 0)
+    {
+        g_free(data);
+    }
+}
+
+static int
+ohos_draw_external_frame(struct ohos_mod *self, int *painted)
+{
+    struct mod *mod;
+    char *data = 0;
+    int frame_width = 0;
+    int frame_height = 0;
+    int sequence = 0;
+    int paint_width;
+    int paint_height;
+    int rv = 0;
+
+    if (self == 0)
+    {
+        return 0;
+    }
+    if (painted != 0)
+    {
+        *painted = 0;
+    }
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        return 1;
+    }
+
+    if (self->frame_pending && self->frame_data != 0)
+    {
+        data = self->frame_data;
+        frame_width = self->frame_width;
+        frame_height = self->frame_height;
+        sequence = self->frame_sequence;
+        self->frame_data = 0;
+        self->frame_pending = 0;
+    }
+
+    ohos_unlock_frame_state();
+
+    if (data == 0)
+    {
+        return 0;
+    }
+    if (painted != 0)
+    {
+        *painted = 1;
+    }
+
+    mod = &self->mod;
+    paint_width = ohos_min(self->width, frame_width);
+    paint_height = ohos_min(self->height, frame_height);
+    if (paint_width <= 0 || paint_height <= 0 ||
+            mod->server_begin_update == 0 || mod->server_end_update == 0)
+    {
+        g_free(data);
+        return 0;
+    }
+
+    rv |= mod->server_begin_update(mod);
+    if (mod->server_paint_rect_bpp != 0)
+    {
+        rv |= mod->server_paint_rect_bpp(mod, 0, 0, paint_width, paint_height,
+                                         data, frame_width, frame_height, 0, 0, 32);
+    }
+    else if (mod->server_paint_rect != 0)
+    {
+        rv |= mod->server_paint_rect(mod, 0, 0, paint_width, paint_height,
+                                     data, frame_width, frame_height, 0, 0);
+    }
+    else
+    {
+        rv = 1;
+    }
+    rv |= mod->server_end_update(mod);
+
+    self->frame_draw_count++;
+    if (self->frame_draw_count <= 3 || (self->frame_draw_count % 30) == 0)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.frame: painted external BGRA frame seq=%d size=%dx%d dst=%dx%d rv=%d",
+            sequence, frame_width, frame_height, paint_width, paint_height, rv);
+    }
+
+    g_free(data);
+    return rv;
 }
 
 static int
@@ -126,10 +282,23 @@ static int
 ohos_mod_connect(struct mod *mod, int fd)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
+    int painted = 0;
+    int rv;
     self->connected = 1;
+
+    if (ohos_lock_frame_state() == 0)
+    {
+        g_ohos_active_mod = self;
+        ohos_unlock_frame_state();
+    }
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    rv = ohos_draw_external_frame(self, &painted);
+    if (painted)
+    {
+        return rv;
+    }
     return ohos_draw_test_frame(self);
 }
 
@@ -216,6 +385,14 @@ ohos_mod_end(struct mod *mod)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
     self->connected = 0;
+    if (ohos_lock_frame_state() == 0)
+    {
+        if (g_ohos_active_mod == self)
+        {
+            g_ohos_active_mod = 0;
+        }
+        ohos_unlock_frame_state();
+    }
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: end");
     return 0;
 }
@@ -243,16 +420,15 @@ static int
 ohos_mod_get_wait_objs(struct mod *mod, tbus *read_objs, int *rcount,
                        tbus *write_objs, int *wcount, int *timeout)
 {
-    (void)mod;
-    (void)read_objs;
+    struct ohos_mod *self = ohos_from_mod(mod);
+
     (void)write_objs;
-    if (rcount != 0)
+    (void)wcount;
+
+    if (read_objs != 0 && rcount != 0 && self->frame_wait_obj != 0)
     {
-        *rcount = 0;
-    }
-    if (wcount != 0)
-    {
-        *wcount = 0;
+        read_objs[*rcount] = self->frame_wait_obj;
+        (*rcount)++;
     }
     if (timeout != 0 && *timeout < 0)
     {
@@ -264,7 +440,12 @@ ohos_mod_get_wait_objs(struct mod *mod, tbus *read_objs, int *rcount,
 static int
 ohos_mod_check_wait_objs(struct mod *mod)
 {
-    (void)mod;
+    struct ohos_mod *self = ohos_from_mod(mod);
+    if (self->frame_wait_obj != 0 && g_is_wait_obj_set(self->frame_wait_obj))
+    {
+        g_reset_wait_obj(self->frame_wait_obj);
+        return ohos_draw_external_frame(self, 0);
+    }
     return 0;
 }
 
@@ -338,6 +519,8 @@ mod_init(void)
     struct ohos_mod *self;
 
     self = (struct ohos_mod *)g_malloc(sizeof(struct ohos_mod), 1);
+    ohos_ensure_frame_mutex();
+    self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
     self->mod.size = sizeof(struct mod);
     self->mod.version = OHOS_MOD_VER;
     self->mod.handle = (tintptr)self;
@@ -368,7 +551,95 @@ mod_exit(tintptr handle)
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: exit");
     if (self != 0)
     {
+        if (ohos_lock_frame_state() == 0)
+        {
+            if (g_ohos_active_mod == self)
+            {
+                g_ohos_active_mod = 0;
+            }
+            ohos_unlock_frame_state();
+        }
+        ohos_discard_pending_frame(self);
+        if (self->frame_wait_obj != 0)
+        {
+            g_delete_wait_obj(self->frame_wait_obj);
+        }
         g_free(self);
     }
+    return 0;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_submit_bgra_frame(const void *data, int width, int height,
+                                    int stride)
+{
+    struct ohos_mod *target;
+    char *packed;
+    char *old_data = 0;
+    tintptr wait_obj = 0;
+    int row;
+    int row_bytes;
+    size_t packed_bytes;
+
+    if (data == 0 || width <= 0 || height <= 0 ||
+            width > OHOS_FRAME_MAX_DIMENSION ||
+            height > OHOS_FRAME_MAX_DIMENSION)
+    {
+        return -1;
+    }
+
+    row_bytes = width * 4;
+    packed_bytes = (size_t)row_bytes * (size_t)height;
+    if (stride < row_bytes ||
+            packed_bytes / (size_t)height != (size_t)row_bytes)
+    {
+        return -1;
+    }
+
+    packed = (char *)g_malloc(packed_bytes, 0);
+    if (packed == 0)
+    {
+        return -2;
+    }
+
+    for (row = 0; row < height; row++)
+    {
+        g_memcpy(packed + ((size_t)row * (size_t)row_bytes),
+                 ((const char *)data) + ((size_t)row * (size_t)stride),
+                 row_bytes);
+    }
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        g_free(packed);
+        return -3;
+    }
+
+    target = g_ohos_active_mod;
+    if (target == 0 || !target->connected)
+    {
+        ohos_unlock_frame_state();
+        g_free(packed);
+        return -4;
+    }
+
+    old_data = target->frame_data;
+    target->frame_data = packed;
+    target->frame_width = width;
+    target->frame_height = height;
+    target->frame_sequence = ++g_ohos_frame_sequence;
+    target->frame_pending = 1;
+    wait_obj = target->frame_wait_obj;
+    ohos_unlock_frame_state();
+
+    if (old_data != 0)
+    {
+        g_free(old_data);
+    }
+    if (wait_obj != 0)
+    {
+        g_set_wait_obj(wait_obj);
+    }
+
     return 0;
 }
