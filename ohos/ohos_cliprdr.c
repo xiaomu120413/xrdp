@@ -36,6 +36,20 @@ ohos_cliprdr_unlock(struct ohos_cliprdr *cliprdr)
     return tc_mutex_unlock(cliprdr->lock);
 }
 
+static void
+ohos_cliprdr_reset_stats(struct ohos_cliprdr *cliprdr)
+{
+    cliprdr->local_format_lists_sent = 0;
+    cliprdr->remote_format_lists_received = 0;
+    cliprdr->local_requests_received = 0;
+    cliprdr->remote_responses_received = 0;
+    cliprdr->pasteboard_reads = 0;
+    cliprdr->pasteboard_writes = 0;
+    cliprdr->pasteboard_changes = 0;
+    cliprdr->suppressed_changes = 0;
+    cliprdr->errors = 0;
+}
+
 void
 ohos_cliprdr_init(struct ohos_cliprdr *cliprdr, struct mod *mod,
                   tintptr wake_obj)
@@ -88,6 +102,7 @@ ohos_cliprdr_connect(struct ohos_cliprdr *cliprdr)
     cliprdr->requested_format = 0;
     cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
     ohos_cliprdr_file_transfer_reset(cliprdr);
+    ohos_cliprdr_reset_stats(cliprdr);
 
     if (cliprdr->mod->server_chansrv_in_use != 0 &&
             cliprdr->mod->server_chansrv_in_use(cliprdr->mod))

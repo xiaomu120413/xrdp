@@ -76,6 +76,21 @@ struct ohos_mod
     int height;
     int bpp;
     int connected;
+    uint64_t session_start_us;
+    uint64_t key_event_count;
+    uint64_t key_sync_event_count;
+    uint64_t mouse_move_event_count;
+    uint64_t mouse_button_event_count;
+    uint64_t input_forwarded_count;
+    uint64_t channel_data_event_count;
+    uint64_t frame_ack_count;
+    uint64_t suppress_output_count;
+    uint64_t monitor_resize_count;
+    uint64_t monitor_full_invalidate_count;
+    uint64_t raw_frame_submit_count;
+    uint64_t h264_frame_submit_count;
+    uint64_t audio_frame_submit_count;
+    uint64_t audio_bytes_submitted;
     int mouse_move_count;
     int frame_draw_count;
     int frame_sequence;
@@ -223,6 +238,98 @@ ohos_delta_us(uint64_t later, uint64_t earlier)
     return later - earlier;
 }
 
+static void
+ohos_reset_session_stats(struct ohos_mod *self)
+{
+    if (self == 0)
+    {
+        return;
+    }
+
+    self->session_start_us = ohos_now_us();
+    self->key_event_count = 0;
+    self->key_sync_event_count = 0;
+    self->mouse_move_event_count = 0;
+    self->mouse_button_event_count = 0;
+    self->input_forwarded_count = 0;
+    self->channel_data_event_count = 0;
+    self->frame_ack_count = 0;
+    self->suppress_output_count = 0;
+    self->monitor_resize_count = 0;
+    self->monitor_full_invalidate_count = 0;
+    self->raw_frame_submit_count = 0;
+    self->h264_frame_submit_count = 0;
+    self->audio_frame_submit_count = 0;
+    self->audio_bytes_submitted = 0;
+    self->mouse_move_count = 0;
+    self->frame_draw_count = 0;
+    self->h264_drop_count = 0;
+    self->h264_waiting_for_sync = 0;
+}
+
+static void
+ohos_log_session_summary(struct ohos_mod *self, const char *reason)
+{
+    uint64_t now_us;
+    uint64_t duration_ms = 0;
+    int h264_queue_count = 0;
+    int h264_drop_count = 0;
+    int h264_waiting_for_sync = 0;
+
+    if (self == 0)
+    {
+        return;
+    }
+
+    now_us = ohos_now_us();
+    if (now_us >= self->session_start_us)
+    {
+        duration_ms = (now_us - self->session_start_us) / 1000ULL;
+    }
+    if (ohos_lock_frame_state() == 0)
+    {
+        h264_queue_count = self->h264_queue_count;
+        h264_drop_count = self->h264_drop_count;
+        h264_waiting_for_sync = self->h264_waiting_for_sync;
+        ohos_unlock_frame_state();
+    }
+
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.session: summary reason=%s client=%s duration_ms=%llu size=%dx%d bpp=%d frames_drawn=%d raw_submitted=%llu h264_submitted=%llu h264_queue=%d h264_dropped=%d h264_waiting_sync=%d",
+        reason == 0 ? "" : reason, self->client_name,
+        (unsigned long long)duration_ms, self->width, self->height, self->bpp,
+        self->frame_draw_count,
+        (unsigned long long)self->raw_frame_submit_count,
+        (unsigned long long)self->h264_frame_submit_count,
+        h264_queue_count, h264_drop_count, h264_waiting_for_sync);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.session: input keys=%llu key_sync=%llu mouse_move=%llu mouse_button=%llu forwarded=%llu channel_data=%llu frame_ack=%llu suppress=%llu resize=%llu full_invalidate=%llu",
+        (unsigned long long)self->key_event_count,
+        (unsigned long long)self->key_sync_event_count,
+        (unsigned long long)self->mouse_move_event_count,
+        (unsigned long long)self->mouse_button_event_count,
+        (unsigned long long)self->input_forwarded_count,
+        (unsigned long long)self->channel_data_event_count,
+        (unsigned long long)self->frame_ack_count,
+        (unsigned long long)self->suppress_output_count,
+        (unsigned long long)self->monitor_resize_count,
+        (unsigned long long)self->monitor_full_invalidate_count);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.session: rdpsnd submitted=%u sent_chunks=%u sent_bytes=%u dropped=%d errors=%u app_audio_frames=%llu app_audio_bytes=%llu cliprdr local_lists=%u remote_lists=%u local_requests=%u remote_responses=%u pb_reads=%u pb_writes=%u pb_changes=%u suppressed=%u errors=%u",
+        self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,
+        self->rdpsnd.sent_bytes, self->rdpsnd.dropped_buffers,
+        self->rdpsnd.errors,
+        (unsigned long long)self->audio_frame_submit_count,
+        (unsigned long long)self->audio_bytes_submitted,
+        self->cliprdr.local_format_lists_sent,
+        self->cliprdr.remote_format_lists_received,
+        self->cliprdr.local_requests_received,
+        self->cliprdr.remote_responses_received,
+        self->cliprdr.pasteboard_reads, self->cliprdr.pasteboard_writes,
+        self->cliprdr.pasteboard_changes,
+        self->cliprdr.suppressed_changes, self->cliprdr.errors);
+}
+
 static struct ohos_frame_trace *
 ohos_trace_slot(struct ohos_mod *self, int frame_id)
 {
@@ -340,6 +447,7 @@ ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
         return;
     }
 
+    self->input_forwarded_count++;
     event.version = XRDP_OHOS_INPUT_EVENT_VERSION;
     event.msg = msg;
     event.param1 = (long)param1;
@@ -756,6 +864,7 @@ ohos_mod_connect(struct mod *mod, int fd)
     struct ohos_mod *self = ohos_from_mod(mod);
     int painted = 0;
     int rv;
+    ohos_reset_session_stats(self);
     self->connected = 1;
 
     if (ohos_lock_frame_state() == 0)
@@ -789,6 +898,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
     {
         case WM_KEYDOWN:
         case WM_KEYUP:
+            self->key_event_count++;
             LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: key %s flags=%ld code=%ld extra=(%ld,%ld)",
                 msg == WM_KEYDOWN ? "down" : "up",
@@ -796,6 +906,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
             break;
 
         case WM_KEYBRD_SYNC:
+            self->key_sync_event_count++;
             LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: key_sync device_flags=%ld key_flags=%ld",
                 param1, param2);
@@ -803,6 +914,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
 
         case WM_MOUSEMOVE:
             self->mouse_move_count++;
+            self->mouse_move_event_count++;
             if ((self->mouse_move_count % OHOS_MOUSE_LOG_SAMPLE) == 0)
             {
                 LOG(LOG_LEVEL_DEBUG,
@@ -829,6 +941,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         case WM_BUTTON8UP:
         case WM_BUTTON9DOWN:
         case WM_BUTTON9UP:
+            self->mouse_button_event_count++;
             LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: mouse_button msg=%d x=%ld y=%ld",
                 msg, param1, param2);
@@ -837,9 +950,10 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         case WM_CHANNEL_DATA:
         {
             int rv = 0;
+            self->channel_data_event_count++;
             rv |= ohos_rdpsnd_process_channel_data(&self->rdpsnd,
-                                                   param1, param2,
-                                                   param3, param4);
+                                                    param1, param2,
+                                                    param3, param4);
             rv |= ohos_cliprdr_process_channel_data(&self->cliprdr,
                                                     param1, param2,
                                                     param3, param4);
@@ -869,6 +983,7 @@ ohos_mod_end(struct mod *mod)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
     self->connected = 0;
+    ohos_log_session_summary(self, "end");
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
     if (ohos_lock_frame_state() == 0)
@@ -945,7 +1060,6 @@ ohos_mod_check_wait_objs(struct mod *mod)
 static int
 ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
 {
-    static int ack_count = 0;
     struct ohos_mod *self = ohos_from_mod(mod);
     struct ohos_frame_trace trace;
     uint64_t ack_us;
@@ -955,8 +1069,9 @@ ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
         flags, frame_id);
     ack_us = ohos_now_us();
     has_trace = ohos_lookup_frame_trace(self, frame_id, &trace);
-    ack_count++;
-    if (has_trace && (ack_count <= 5 || (ack_count % 60) == 0))
+    self->frame_ack_count++;
+    if (has_trace && (self->frame_ack_count <= 5 ||
+            (self->frame_ack_count % 60ULL) == 0))
     {
         LOG(LOG_LEVEL_INFO,
             "xrdp.ohos.e2e: ack frame=%d source_seq=%llu total_from_acquire=%.3fms bridge=%.3fms submitter_wait=%.3fms submitter_copy=%.3fms backend_wait=%.3fms backend_copy=%.3fms draw_wait=%.3fms avc420_copy_or_convert=%.3fms avc420_enqueue=%.3fms encode_and_client_ack=%.3fms flags=0x%8.8x pixel=%s",
@@ -973,7 +1088,8 @@ ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
             ohos_delta_us(ack_us, trace.gfx_enqueue_done_us) / 1000.0,
             flags, ohos_frame_format_name(trace.format));
     }
-    else if (!has_trace && (ack_count <= 5 || (ack_count % 60) == 0))
+    else if (!has_trace && (self->frame_ack_count <= 5 ||
+             (self->frame_ack_count % 60ULL) == 0))
     {
         LOG(LOG_LEVEL_INFO,
             "xrdp.ohos.e2e: ack frame=%d has no trace flags=0x%8.8x",
@@ -991,6 +1107,7 @@ ohos_mod_suppress_output(struct mod *mod, int suppress,
     LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.frame: suppress=%d rect=(%d,%d,%d,%d)",
         suppress, left, top, right, bottom);
+    ohos_from_mod(mod)->suppress_output_count++;
     ohos_forward_backend_event(ohos_from_mod(mod), XRDP_OHOS_BACKEND_EVENT_SUPPRESS_OUTPUT,
                                suppress, left, top, right, bottom, 0, 0);
     return 0;
@@ -1007,6 +1124,7 @@ ohos_mod_server_monitor_resize(struct mod *mod,
     (void)num_monitors;
     (void)monitors;
 
+    self->monitor_resize_count++;
     self->width = width;
     self->height = height;
     if (in_progress != 0)
@@ -1026,6 +1144,7 @@ ohos_mod_server_monitor_full_invalidate(struct mod *mod,
                                         int width, int height)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
+    self->monitor_full_invalidate_count++;
     self->width = width;
     self->height = height;
 
@@ -1306,6 +1425,7 @@ xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame)
     backend_pending_us = ohos_now_us();
     target->frame_backend_pending_us = backend_pending_us;
     target->frame_pending = 1;
+    target->raw_frame_submit_count++;
     ohos_store_frame_trace_locked(target);
     wait_obj = target->frame_wait_obj;
     ohos_unlock_frame_state();
@@ -1476,6 +1596,7 @@ xrdp_ohos_backend_submit_encoded_frame(
     }
     target->h264_tail = queued;
     target->h264_queue_count++;
+    target->h264_frame_submit_count++;
     queue_count = target->h264_queue_count;
     wait_obj = target->frame_wait_obj;
     ohos_unlock_frame_state();
@@ -1529,6 +1650,11 @@ xrdp_ohos_backend_submit_audio_frame(
         return XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
     }
     rv = ohos_rdpsnd_submit_audio(&target->rdpsnd, frame);
+    if (rv == XRDP_OHOS_BACKEND_STATUS_OK)
+    {
+        target->audio_frame_submit_count++;
+        target->audio_bytes_submitted += (uint64_t)frame->bytes;
+    }
     ohos_unlock_frame_state();
     return rv;
 }

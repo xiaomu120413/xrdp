@@ -71,6 +71,18 @@ ohos_rdpsnd_drop_oldest_locked(struct ohos_rdpsnd *rdpsnd)
     ohos_rdpsnd_free_buffer(buffer);
 }
 
+static void
+ohos_rdpsnd_reset_stats(struct ohos_rdpsnd *rdpsnd)
+{
+    rdpsnd->dropped_buffers = 0;
+    rdpsnd->submitted_buffers = 0;
+    rdpsnd->sent_chunks = 0;
+    rdpsnd->sent_bytes = 0;
+    rdpsnd->client_format_lists = 0;
+    rdpsnd->confirms = 0;
+    rdpsnd->errors = 0;
+}
+
 static int
 ohos_rdpsnd_audio_format_supported(
     const struct xrdp_ohos_audio_frame *frame)
@@ -134,6 +146,7 @@ ohos_rdpsnd_connect(struct ohos_rdpsnd *rdpsnd)
     rdpsnd->format_selected = 0;
     rdpsnd->client_format_index = -1;
     rdpsnd->block_no = 0;
+    ohos_rdpsnd_reset_stats(rdpsnd);
 
     if (rdpsnd->mod->server_chansrv_in_use != 0 &&
             rdpsnd->mod->server_chansrv_in_use(rdpsnd->mod))
