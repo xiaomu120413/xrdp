@@ -26,6 +26,7 @@ extern "C"
 #define XRDP_OHOS_FEATURE_BACKEND_EVENT_CALLBACK 0x00000010U
 #define XRDP_OHOS_FEATURE_CLIPRDR 0x00000020U
 #define XRDP_OHOS_FEATURE_RDPSND 0x00000040U
+#define XRDP_OHOS_FEATURE_DISPLAY_GEOMETRY 0x00000080U
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -100,6 +101,24 @@ struct xrdp_ohos_abi_info
     uint32_t backend_event_version;
     uint32_t feature_flags;
     uint32_t status_flags;
+    uint32_t reserved;
+};
+
+struct xrdp_ohos_display_geometry
+{
+    uint32_t size;
+    uint32_t valid;
+    uint64_t display_id;
+    int32_t width;
+    int32_t height;
+    int32_t origin_x;
+    int32_t origin_y;
+    uint32_t virtual_pixel_ratio_valid;
+    float virtual_pixel_ratio;
+    uint32_t refresh_rate_valid;
+    uint32_t refresh_rate;
+    uint32_t source_mode_valid;
+    int32_t source_mode;
     uint32_t reserved;
 };
 
@@ -186,6 +205,10 @@ typedef void (*xrdp_ohos_backend_event_fn)(
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info);
+
+XRDP_OHOS_API int
+xrdp_ohos_query_display_geometry(
+    struct xrdp_ohos_display_geometry *geometry);
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame);

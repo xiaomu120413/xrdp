@@ -1260,7 +1260,8 @@ xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info)
                           XRDP_OHOS_FEATURE_INPUT_CALLBACK |
                           XRDP_OHOS_FEATURE_BACKEND_EVENT_CALLBACK |
                           XRDP_OHOS_FEATURE_CLIPRDR |
-                          XRDP_OHOS_FEATURE_RDPSND;
+                          XRDP_OHOS_FEATURE_RDPSND |
+                          XRDP_OHOS_FEATURE_DISPLAY_GEOMETRY;
     info->status_flags = 0;
     return XRDP_OHOS_BACKEND_STATUS_OK;
 }
