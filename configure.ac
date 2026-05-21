@@ -83,13 +83,20 @@ AC_ARG_ENABLE(ohos, AS_HELP_STRING([--enable-ohos],
               [], [enable_ohos=no])
 AM_CONDITIONAL(XRDP_OHOS, [test x$enable_ohos = xyes])
 XRDP_OHOS_LIBS=
+XRDP_OHOS_BACKEND_LIBS=
 if test "x$enable_ohos" = "xyes"; then
   AC_DEFINE([XRDP_OHOS], 1, [Build a minimal HarmonyOS server front end])
   AC_CHECK_HEADER([hilog/log.h], [],
     [AC_MSG_ERROR([HarmonyOS HiLog header hilog/log.h is required for --enable-ohos])])
+  AC_CHECK_HEADER([database/pasteboard/oh_pasteboard.h], [],
+    [AC_MSG_ERROR([HarmonyOS Pasteboard header is required for --enable-ohos])])
+  AC_CHECK_HEADER([database/udmf/udmf.h], [],
+    [AC_MSG_ERROR([HarmonyOS UDMF header is required for --enable-ohos])])
   XRDP_OHOS_LIBS="-lhilog_ndk.z"
+  XRDP_OHOS_BACKEND_LIBS="-lpasteboard -ludmf"
 fi
 AC_SUBST([XRDP_OHOS_LIBS])
+AC_SUBST([XRDP_OHOS_BACKEND_LIBS])
 
 AC_ARG_ENABLE(tests,
               AS_HELP_STRING([--enable-tests],

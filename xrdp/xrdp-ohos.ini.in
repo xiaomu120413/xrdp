@@ -9,7 +9,7 @@ crypt_level=high
 certificate=
 key_file=
 autorun=OHOS
-allow_channels=false
+allow_channels=true
 allow_multimon=true
 bitmap_cache=true
 bitmap_compression=true
@@ -32,7 +32,7 @@ EnableProcessId=true
 rdpdr=false
 rdpsnd=false
 drdynvc=false
-cliprdr=false
+cliprdr=true
 rail=false
 xrdpvr=false
 

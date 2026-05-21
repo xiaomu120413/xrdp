@@ -24,10 +24,18 @@ module_LTLIBRARIES = \
 
 libxrdpohos_la_SOURCES = \
   ohos.c \
+  ohos_cliprdr_channel.c \
+  ohos_cliprdr.c \
+  ohos_cliprdr_messages.c \
+  ohos_cliprdr_pasteboard.c \
+  ohos_cliprdr_private.h \
+  ohos_cliprdr_protocol.c \
+  ohos_cliprdr.h \
   xrdp_ohos.h
 
 libxrdpohos_la_LIBADD = \
-  $(top_builddir)/common/libcommon.la
+  $(top_builddir)/common/libcommon.la \
+  $(XRDP_OHOS_BACKEND_LIBS)
 
 if XRDP_OHOS
 libxrdpohos_la_LDFLAGS = \

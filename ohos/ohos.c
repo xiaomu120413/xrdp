@@ -14,6 +14,8 @@
 #include "xrdp_constants.h"
 #include "xup.h"
 
+#include "ohos_cliprdr.h"
+
 #define XRDP_OHOS_API EXPORT_CC
 #include "xrdp_ohos.h"
 
@@ -36,6 +38,7 @@ struct ohos_mod
     char *frame_data;
     tintptr frame_wait_obj;
     char client_name[256];
+    struct ohos_cliprdr cliprdr;
 };
 
 static tbus g_ohos_frame_mutex = 0;
@@ -369,6 +372,7 @@ ohos_mod_connect(struct mod *mod, int fd)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    (void)ohos_cliprdr_connect(&self->cliprdr);
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT,
                                0, 0, 0, 0, 0, 0, 0);
     ohos_forward_input_event(self, XRDP_OHOS_INPUT_SESSION_CONNECT, 0, 0, 0, 0);
@@ -436,10 +440,9 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
             break;
 
         case WM_CHANNEL_DATA:
-            LOG(LOG_LEVEL_DEBUG,
-                "xrdp.ohos.channel: ignored channel data id_flags=%ld bytes=%ld total=%ld",
-                param1, param2, param4);
-            break;
+            return ohos_cliprdr_process_channel_data(&self->cliprdr,
+                                                     param1, param2,
+                                                     param3, param4);
 
         default:
             LOG(LOG_LEVEL_DEBUG,
@@ -464,6 +467,7 @@ ohos_mod_end(struct mod *mod)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
     self->connected = 0;
+    ohos_cliprdr_disconnect(&self->cliprdr);
     if (ohos_lock_frame_state() == 0)
     {
         if (g_ohos_active_mod == self)
@@ -523,12 +527,14 @@ static int
 ohos_mod_check_wait_objs(struct mod *mod)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
+    int rv = 0;
     if (self->frame_wait_obj != 0 && g_is_wait_obj_set(self->frame_wait_obj))
     {
         g_reset_wait_obj(self->frame_wait_obj);
-        return ohos_draw_external_frame(self, 0);
+        rv |= ohos_draw_external_frame(self, 0);
     }
-    return 0;
+    rv |= ohos_cliprdr_check_wait_objs(&self->cliprdr);
+    return rv;
 }
 
 static int
@@ -609,6 +615,7 @@ mod_init(void)
     self = (struct ohos_mod *)g_malloc(sizeof(struct ohos_mod), 1);
     ohos_ensure_frame_mutex();
     self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
+    ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
     self->mod.size = sizeof(struct mod);
     self->mod.version = XRDP_OHOS_MOD_VERSION;
     self->mod.handle = (tintptr)self;
@@ -648,6 +655,7 @@ mod_exit(tintptr handle)
             ohos_unlock_frame_state();
         }
         ohos_discard_pending_frame(self);
+        ohos_cliprdr_deinit(&self->cliprdr);
         if (self->frame_wait_obj != 0)
         {
             g_delete_wait_obj(self->frame_wait_obj);
