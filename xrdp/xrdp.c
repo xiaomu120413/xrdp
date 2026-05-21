@@ -33,6 +33,9 @@
 #if !defined(PACKAGE_VERSION)
 #define PACKAGE_VERSION "???"
 #endif
+#if !defined(VERSION_YEAR)
+#define VERSION_YEAR 2025
+#endif
 
 static struct xrdp_listen *g_listen = 0;
 
