@@ -93,7 +93,7 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height)
     }
     EmitCaptureInfo("xrdp active mstsc session detected; scheduling screen capture desktop=" +
         std::to_string(width) + "x" + std::to_string(height) + geometry +
-        " inputMapping=desktop-content-fit-to-display" +
+        " inputMapping=desktop-aspect-to-display" +
         (restartCapture ? " restartCapture=1" : " restartCapture=0"));
 
     std::thread([this, options, restartCapture]() {

@@ -30,6 +30,7 @@ extern "C"
 #define XRDP_OHOS_FEATURE_DIRECT_INPUT 0x00000100U
 #define XRDP_OHOS_FEATURE_INTERNAL_CAPTURE 0x00000200U
 #define XRDP_OHOS_FEATURE_CAPTURE_DIAGNOSTICS 0x00000400U
+#define XRDP_OHOS_FEATURE_INPUT_AUTHORIZATION 0x00000800U
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -214,6 +215,7 @@ struct xrdp_ohos_input_event
     int height;
     int bpp;
     int connected;
+    uint64_t trace_id;
 };
 
 struct xrdp_ohos_backend_event
@@ -251,6 +253,9 @@ xrdp_ohos_query_display_geometry(
 XRDP_OHOS_API int
 xrdp_ohos_capture_get_diagnostics(
     struct xrdp_ohos_capture_diagnostics *diagnostics);
+
+XRDP_OHOS_API int
+xrdp_ohos_backend_prime_input_authorization(const char *reason);
 
 XRDP_OHOS_API int
 xrdp_ohos_capture_submit_frame(const struct xrdp_ohos_frame *frame);

@@ -71,15 +71,150 @@ ohos_access_authorized(struct ohos_mod *self)
 }
 
 static int
+ohos_mod_should_log_native_result(int msg)
+{
+    return msg == WM_KEYDOWN ||
+           msg == WM_KEYUP ||
+           (msg >= WM_LBUTTONUP && msg <= WM_BUTTON9DOWN);
+}
+
+static void
+ohos_init_single_monitor(int width, int height, struct monitor_info *monitor)
+{
+    if (monitor == 0)
+    {
+        return;
+    }
+
+    monitor->left = 0;
+    monitor->top = 0;
+    monitor->right = width - 1;
+    monitor->bottom = height - 1;
+    monitor->flags = 0;
+    monitor->physical_width = 0;
+    monitor->physical_height = 0;
+    monitor->orientation = 0;
+    monitor->desktop_scale_factor = 0;
+    monitor->device_scale_factor = 0;
+    monitor->is_primary = TS_MONITOR_PRIMARY;
+}
+
+static int
+ohos_mod_request_client_desktop_size(struct ohos_mod *self,
+                                     const char *reason)
+{
+    struct monitor_info monitor;
+    int rv;
+
+    if (self == 0 || !self->desktop_size.normalized)
+    {
+        return 0;
+    }
+    if (self->mod.client_monitor_resize == 0)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.resize: cannot request client desktop reason=%s target=%dx%d missing_client_monitor_resize=1",
+            reason == 0 ? "" : reason,
+            self->desktop_size.target_width,
+            self->desktop_size.target_height);
+        return 1;
+    }
+
+    ohos_init_single_monitor(self->desktop_size.target_width,
+                             self->desktop_size.target_height, &monitor);
+    rv = self->mod.client_monitor_resize(&self->mod,
+                                         self->desktop_size.target_width,
+                                         self->desktop_size.target_height,
+                                         1, &monitor);
+    LOG(rv == 0 ? LOG_LEVEL_INFO : LOG_LEVEL_WARNING,
+        "xrdp.ohos.resize: request client desktop reason=%s requested=%dx%d target=%dx%d display=%dx%d rv=%d",
+        reason == 0 ? "" : reason,
+        self->desktop_size.requested_width,
+        self->desktop_size.requested_height,
+        self->desktop_size.target_width,
+        self->desktop_size.target_height,
+        self->desktop_size.display_width,
+        self->desktop_size.display_height, rv);
+    return rv;
+}
+
+static int
+ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
+                             int requested_height, const char *reason,
+                             int request_client_resize)
+{
+    struct ohos_desktop_size desktop;
+    int old_width;
+    int old_height;
+    int resize_rv = 0;
+
+    if (self == 0)
+    {
+        return 1;
+    }
+
+    old_width = self->width;
+    old_height = self->height;
+    if (ohos_select_desktop_size(requested_width, requested_height,
+                                 &desktop) != 0)
+    {
+        desktop.requested_width = requested_width;
+        desktop.requested_height = requested_height;
+        desktop.target_width = requested_width;
+        desktop.target_height = requested_height;
+        desktop.display_width = 0;
+        desktop.display_height = 0;
+        desktop.normalized = 0;
+        desktop.valid_display = 0;
+    }
+
+    self->requested_width = requested_width;
+    self->requested_height = requested_height;
+    self->desktop_size = desktop;
+    self->width = desktop.target_width;
+    self->height = desktop.target_height;
+
+    if (old_width != self->width || old_height != self->height ||
+            desktop.normalized)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.resize: desktop reason=%s requested=%dx%d target=%dx%d old=%dx%d display=%dx%d display_valid=%d normalized=%d connected=%d",
+            reason == 0 ? "" : reason,
+            desktop.requested_width, desktop.requested_height,
+            desktop.target_width, desktop.target_height,
+            old_width, old_height,
+            desktop.display_width, desktop.display_height,
+            desktop.valid_display, desktop.normalized, self->connected);
+    }
+
+    if (request_client_resize && desktop.normalized)
+    {
+        resize_rv = ohos_mod_request_client_desktop_size(self, reason);
+        if (resize_rv != 0)
+        {
+            self->desktop_size.target_width = requested_width;
+            self->desktop_size.target_height = requested_height;
+            self->desktop_size.normalized = 0;
+            self->width = requested_width;
+            self->height = requested_height;
+            LOG(LOG_LEVEL_WARNING,
+                "xrdp.ohos.resize: fallback to requested desktop reason=%s desktop=%dx%d",
+                reason == 0 ? "" : reason, self->width, self->height);
+        }
+    }
+
+    return resize_rv;
+}
+
+static int
 ohos_mod_start(struct mod *mod, int width, int height, int bpp)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
-    self->width = width;
-    self->height = height;
     self->bpp = bpp;
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: start width=%d height=%d bpp=%d",
         width, height, bpp);
+    (void)ohos_mod_update_desktop_size(self, width, height, "module_start", 0);
     return ohos_clear_frame(self, "start waiting for external frame");
 }
 
@@ -107,6 +242,13 @@ ohos_mod_connect(struct mod *mod, int fd)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    (void)ohos_mod_update_desktop_size(self,
+                                       self->requested_width > 0 ?
+                                           self->requested_width : self->width,
+                                       self->requested_height > 0 ?
+                                           self->requested_height :
+                                           self->height,
+                                       "session_connect", 1);
     ohos_cursor_start_session(self);
     ohos_input_prime_authorization("session connect");
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
@@ -129,16 +271,19 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
     struct ohos_mod *self = ohos_from_mod(mod);
     struct xrdp_ohos_input_event input_event;
     int input_rc;
+    uint64_t trace_id = ++self->input_trace_count;
 
     switch (msg)
     {
         case WM_KEYDOWN:
         case WM_KEYUP:
             self->key_event_count++;
-            LOG(LOG_LEVEL_DEBUG,
-                "xrdp.ohos.input: key %s flags=%ld code=%ld extra=(%ld,%ld)",
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.input: stage=module_recv trace=%llu key=%s flags=%ld code=%ld extra=(%ld,%ld) desktop=%dx%d connected=%d",
+                (unsigned long long)trace_id,
                 msg == WM_KEYDOWN ? "down" : "up",
-                param1, param2, param3, param4);
+                param1, param2, param3, param4,
+                self->width, self->height, self->connected);
             break;
 
         case WM_KEYBRD_SYNC:
@@ -151,11 +296,17 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         case WM_MOUSEMOVE:
             self->mouse_move_count++;
             self->mouse_move_event_count++;
+            self->last_mouse_move_trace_id = trace_id;
+            self->last_mouse_move_x = (long)param1;
+            self->last_mouse_move_y = (long)param2;
+            self->last_mouse_move_us = ohos_now_us();
             if ((self->mouse_move_count % OHOS_MOUSE_LOG_SAMPLE) == 0)
             {
                 LOG(LOG_LEVEL_DEBUG,
-                    "xrdp.ohos.input: mouse_move x=%ld y=%ld count=%d",
-                    param1, param2, self->mouse_move_count);
+                    "xrdp.ohos.input: stage=module_recv trace=%llu mouse_move x=%ld y=%ld desktop=%dx%d count=%d connected=%d",
+                    (unsigned long long)trace_id,
+                    param1, param2, self->width, self->height,
+                    self->mouse_move_count, self->connected);
             }
             break;
 
@@ -178,9 +329,17 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         case WM_BUTTON9DOWN:
         case WM_BUTTON9UP:
             self->mouse_button_event_count++;
-            LOG(LOG_LEVEL_DEBUG,
-                "xrdp.ohos.input: mouse_button msg=%d x=%ld y=%ld",
-                msg, param1, param2);
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.input: stage=module_recv trace=%llu mouse_button msg=%d x=%ld y=%ld extra=(%ld,%ld) desktop=%dx%d count=%llu connected=%d last_move_trace=%llu last_move=(%ld,%ld) last_move_age_us=%llu",
+                (unsigned long long)trace_id,
+                msg, param1, param2, param3, param4,
+                self->width, self->height,
+                (unsigned long long)self->mouse_button_event_count,
+                self->connected,
+                (unsigned long long)self->last_mouse_move_trace_id,
+                self->last_mouse_move_x, self->last_mouse_move_y,
+                (unsigned long long)ohos_delta_us(ohos_now_us(),
+                                                  self->last_mouse_move_us));
             break;
 
         case WM_CHANNEL_DATA:
@@ -204,11 +363,30 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
     }
 
     ohos_fill_input_event(self, msg, param1, param2, param3, param4,
-                          &input_event);
+                          trace_id, &input_event);
     input_rc = ohos_input_handle_event(&self->input, &input_event);
     if (input_rc == 0)
     {
         ohos_cursor_handle_pointer_event(self, msg, param1, param2);
+    }
+    if (ohos_mod_should_log_native_result(msg))
+    {
+        LOG(input_rc == 0 ? LOG_LEVEL_INFO : LOG_LEVEL_WARNING,
+            "xrdp.ohos.input: stage=native_handle trace=%llu result=%s msg=%d p=(%ld,%ld,%ld,%ld) dropped=%llu sent=%llu",
+            (unsigned long long)trace_id,
+            input_rc == 0 ? "ok" : "drop",
+            msg, param1, param2, param3, param4,
+            (unsigned long long)self->input.dropped_count,
+            (unsigned long long)self->input.sent_count);
+    }
+    else if (input_rc != 0 && msg != WM_MOUSEMOVE)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.input: stage=native_handle trace=%llu result=drop msg=%d p=(%ld,%ld,%ld,%ld) dropped=%llu sent=%llu",
+            (unsigned long long)trace_id,
+            msg, param1, param2, param3, param4,
+            (unsigned long long)self->input.dropped_count,
+            (unsigned long long)self->input.sent_count);
     }
     ohos_forward_input_event(self, msg, param1, param2, param3, param4);
     return 0;
@@ -381,15 +559,16 @@ ohos_mod_server_monitor_resize(struct mod *mod,
     (void)monitors;
 
     self->monitor_resize_count++;
-    self->width = width;
-    self->height = height;
+    (void)ohos_mod_update_desktop_size(self, width, height,
+                                       "client_monitor_resize", 1);
     if (in_progress != 0)
     {
         *in_progress = 0;
     }
 
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.resize: client resize %dx%d",
-        width, height);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.resize: client resize requested=%dx%d active=%dx%d",
+        width, height, self->width, self->height);
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_MONITOR_RESIZE,
                                0, 0, 0, width, height, 0, 0);
     return ohos_clear_frame(self, "resize waiting for external frame");
@@ -401,11 +580,12 @@ ohos_mod_server_monitor_full_invalidate(struct mod *mod,
 {
     struct ohos_mod *self = ohos_from_mod(mod);
     self->monitor_full_invalidate_count++;
-    self->width = width;
-    self->height = height;
+    (void)ohos_mod_update_desktop_size(self, width, height,
+                                       "full_invalidate", 0);
 
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.resize: full invalidate %dx%d",
-        width, height);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.resize: full invalidate requested=%dx%d active=%dx%d",
+        width, height, self->width, self->height);
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_MONITOR_FULL_INVALIDATE,
                                0, 0, 0, width, height, 0, 0);
     return ohos_clear_frame(self, "full invalidate waiting for external frame");

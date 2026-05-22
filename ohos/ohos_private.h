@@ -9,6 +9,7 @@
 
 #include "ohos_cliprdr.h"
 #include "ohos_cursor.h"
+#include "ohos_desktop_size.h"
 #include "ohos_gfx_avc420.h"
 #include "ohos_input.h"
 #include "ohos_rdpsnd.h"
@@ -70,13 +71,21 @@ struct ohos_mod
     struct mod mod;
     int width;
     int height;
+    int requested_width;
+    int requested_height;
     int bpp;
     int connected;
+    struct ohos_desktop_size desktop_size;
     uint64_t session_start_us;
     uint64_t key_event_count;
     uint64_t key_sync_event_count;
     uint64_t mouse_move_event_count;
     uint64_t mouse_button_event_count;
+    uint64_t input_trace_count;
+    uint64_t last_mouse_move_trace_id;
+    long last_mouse_move_x;
+    long last_mouse_move_y;
+    uint64_t last_mouse_move_us;
     uint64_t input_forwarded_count;
     uint64_t channel_data_event_count;
     uint64_t frame_ack_count;
@@ -179,6 +188,7 @@ ohos_lookup_frame_trace(struct ohos_mod *self, int frame_id,
 void
 ohos_fill_input_event(struct ohos_mod *self, int msg, tbus param1,
                       tbus param2, tbus param3, tbus param4,
+                      uint64_t trace_id,
                       struct xrdp_ohos_input_event *event);
 
 void

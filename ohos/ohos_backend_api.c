@@ -49,8 +49,16 @@ xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info)
                           XRDP_OHOS_FEATURE_DISPLAY_GEOMETRY |
                           XRDP_OHOS_FEATURE_DIRECT_INPUT |
                           XRDP_OHOS_FEATURE_INTERNAL_CAPTURE |
-                          XRDP_OHOS_FEATURE_CAPTURE_DIAGNOSTICS;
+                          XRDP_OHOS_FEATURE_CAPTURE_DIAGNOSTICS |
+                          XRDP_OHOS_FEATURE_INPUT_AUTHORIZATION;
     info->status_flags = 0;
+    return XRDP_OHOS_BACKEND_STATUS_OK;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_prime_input_authorization(const char *reason)
+{
+    ohos_input_prime_authorization(reason == 0 ? "xrdp backend load" : reason);
     return XRDP_OHOS_BACKEND_STATUS_OK;
 }
 

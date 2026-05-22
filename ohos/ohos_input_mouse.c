@@ -421,11 +421,19 @@ ohos_input_resolve_mouse_coordinates(
     coords->source_height = 0;
     coords->target_width = 0;
     coords->target_height = 0;
+    coords->full_display_x = 0;
+    coords->full_display_y = 0;
+    coords->fit_display_x = 0;
+    coords->fit_display_y = 0;
     coords->content_rect_valid = 0;
     coords->content_left = 0;
     coords->content_top = 0;
     coords->content_width = 0;
     coords->content_height = 0;
+    coords->content_clamped_x = 0;
+    coords->content_clamped_y = 0;
+    coords->inside_content_rect = 0;
+    coords->content_mapping_active = 0;
     coords->virtual_pixel_ratio_valid = 0;
     coords->virtual_pixel_ratio = 0.0F;
 
@@ -449,26 +457,54 @@ ohos_input_resolve_mouse_coordinates(
     source_height = event->height > 0 ? event->height : geometry->height;
     coords->display_id = geometry->display_id > (uint64_t)INT_MAX ?
         INT_MAX : (int)geometry->display_id;
+    coords->full_display_x = ohos_input_scale_coordinate(event->param1,
+                                                         source_width,
+                                                         geometry->width);
+    coords->full_display_y = ohos_input_scale_coordinate(event->param2,
+                                                         source_height,
+                                                         geometry->height);
     ohos_input_resolve_content_rect(source_width, source_height,
                                     geometry->width, geometry->height,
                                     coords);
     if (coords->content_rect_valid)
     {
-        coords->display_x = ohos_input_scale_coordinate_from_content(
+        coords->inside_content_rect =
+            event->param1 >= coords->content_left &&
+            event->param1 < coords->content_left + coords->content_width &&
+            event->param2 >= coords->content_top &&
+            event->param2 < coords->content_top + coords->content_height;
+        coords->content_clamped_x = ohos_input_clamp_long(
+            event->param1 - coords->content_left, 0,
+            coords->content_width - 1);
+        coords->content_clamped_y = ohos_input_clamp_long(
+            event->param2 - coords->content_top, 0,
+            coords->content_height - 1);
+        coords->fit_display_x = ohos_input_scale_coordinate_from_content(
             event->param1, coords->content_left, coords->content_width,
             geometry->width);
-        coords->display_y = ohos_input_scale_coordinate_from_content(
+        coords->fit_display_y = ohos_input_scale_coordinate_from_content(
             event->param2, coords->content_top, coords->content_height,
             geometry->height);
     }
     else
     {
-        coords->display_x = ohos_input_scale_coordinate(event->param1,
-                                                        source_width,
-                                                        geometry->width);
-        coords->display_y = ohos_input_scale_coordinate(event->param2,
-                                                        source_height,
-                                                        geometry->height);
+        coords->fit_display_x = coords->full_display_x;
+        coords->fit_display_y = coords->full_display_y;
+        coords->inside_content_rect = 1;
+    }
+    if (coords->content_rect_valid &&
+            (coords->content_left != 0 || coords->content_top != 0 ||
+             coords->content_width != source_width ||
+             coords->content_height != source_height))
+    {
+        coords->display_x = coords->fit_display_x;
+        coords->display_y = coords->fit_display_y;
+        coords->content_mapping_active = 1;
+    }
+    else
+    {
+        coords->display_x = coords->full_display_x;
+        coords->display_y = coords->full_display_y;
     }
     if (geometry->height > 1 && coords->display_y == 0)
     {

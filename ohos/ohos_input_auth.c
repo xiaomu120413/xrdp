@@ -8,6 +8,7 @@
 
 #include <stdatomic.h>
 #include <stdbool.h>
+#include <string.h>
 #include <time.h>
 #include <multimodalinput/oh_input_manager.h>
 
@@ -47,6 +48,8 @@ ohos_input_mark_unauthorized(void)
 {
     atomic_store(&g_authorized_status, UNAUTHORIZED);
     atomic_store(&g_authorization_requested, 0);
+    LOG(LOG_LEVEL_WARNING,
+        "xrdp.ohos.input: stage=auth_mark result=unauthorized reason=inject_permission_denied");
 }
 
 static void
@@ -62,6 +65,14 @@ static int
 ohos_input_should_log_auth(uint32_t count)
 {
     return count <= 3U || (count % 500U) == 0U;
+}
+
+static int
+ohos_input_auth_reason_is_hot_path(const char *reason)
+{
+    return reason != 0 &&
+           (strcmp(reason, "mouse event") == 0 ||
+            strcmp(reason, "key event") == 0);
 }
 
 int
@@ -91,10 +102,19 @@ ohos_input_ensure_authorized(const char *reason)
     Input_Result query_rc;
     uint64_t now_ms;
     int should_request;
+    int is_hot_path = ohos_input_auth_reason_is_hot_path(reason);
     Input_Result request_rc;
 
     if (atomic_load(&g_authorized_status) == AUTHORIZED)
     {
+        if (!is_hot_path)
+        {
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.input: stage=auth_check result=authorized source=atomic reason=%s status=%d requested=%d last_request_ms=%llu",
+                reason == 0 ? "" : reason, AUTHORIZED,
+                atomic_load(&g_authorization_requested),
+                (unsigned long long)g_last_authorization_request_ms);
+        }
         return 1;
     }
 
@@ -104,6 +124,14 @@ ohos_input_ensure_authorized(const char *reason)
         atomic_store(&g_authorized_status, status);
         if (status == AUTHORIZED)
         {
+            if (!is_hot_path)
+            {
+                LOG(LOG_LEVEL_INFO,
+                    "xrdp.ohos.input: stage=auth_check result=authorized source=query reason=%s query_rc=%d status=%d requested=%d last_request_ms=%llu",
+                    reason == 0 ? "" : reason, (int)query_rc, (int)status,
+                    atomic_load(&g_authorization_requested),
+                    (unsigned long long)g_last_authorization_request_ms);
+            }
             return 1;
         }
     }
@@ -118,8 +146,11 @@ ohos_input_ensure_authorized(const char *reason)
         if (ohos_input_should_log_auth(count))
         {
             LOG(LOG_LEVEL_DEBUG,
-                "xrdp.ohos.input: injection authorization pending reason=%s query_rc=%d status=%d",
-                reason == 0 ? "" : reason, (int)query_rc, (int)status);
+                "xrdp.ohos.input: stage=auth_check result=pending reason=%s query_rc=%d status=%d requested=%d last_request_ms=%llu now_ms=%llu",
+                reason == 0 ? "" : reason, (int)query_rc, (int)status,
+                atomic_load(&g_authorization_requested),
+                (unsigned long long)g_last_authorization_request_ms,
+                (unsigned long long)now_ms);
         }
         return 0;
     }
@@ -130,6 +161,15 @@ ohos_input_ensure_authorized(const char *reason)
     if (request_rc == INPUT_INJECTION_AUTHORIZED)
     {
         atomic_store(&g_authorized_status, AUTHORIZED);
+        if (!is_hot_path)
+        {
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.input: stage=auth_request result=authorized reason=%s request_rc=%d query_rc=%d status=%d requested=%d last_request_ms=%llu",
+                reason == 0 ? "" : reason, (int)request_rc,
+                (int)query_rc, (int)status,
+                atomic_load(&g_authorization_requested),
+                (unsigned long long)g_last_authorization_request_ms);
+        }
         return 1;
     }
 
@@ -138,9 +178,12 @@ ohos_input_ensure_authorized(const char *reason)
         if (ohos_input_should_log_auth(count))
         {
             LOG(LOG_LEVEL_INFO,
-                "xrdp.ohos.input: injection authorization requested reason=%s request_rc=%d query_rc=%d status=%d",
+                "xrdp.ohos.input: stage=auth_request result=pending reason=%s request_rc=%d query_rc=%d status=%d requested=%d last_request_ms=%llu now_ms=%llu",
                 reason == 0 ? "" : reason, (int)request_rc,
-                (int)query_rc, (int)status);
+                (int)query_rc, (int)status,
+                atomic_load(&g_authorization_requested),
+                (unsigned long long)g_last_authorization_request_ms,
+                (unsigned long long)now_ms);
         }
     }
     return 0;
@@ -149,5 +192,14 @@ ohos_input_ensure_authorized(const char *reason)
 void
 ohos_input_prime_authorization(const char *reason)
 {
-    (void)ohos_input_ensure_authorized(reason);
+    int before_status = atomic_load(&g_authorized_status);
+    int before_requested = atomic_load(&g_authorization_requested);
+    int ready = ohos_input_ensure_authorized(reason);
+
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.input: stage=auth_prime reason=%s ready=%d status=%d->%d requested=%d->%d last_request_ms=%llu",
+        reason == 0 ? "" : reason, ready,
+        before_status, atomic_load(&g_authorized_status),
+        before_requested, atomic_load(&g_authorization_requested),
+        (unsigned long long)g_last_authorization_request_ms);
 }

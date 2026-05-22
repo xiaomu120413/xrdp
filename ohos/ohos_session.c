@@ -66,6 +66,11 @@ ohos_reset_session_stats(struct ohos_mod *self)
     self->key_sync_event_count = 0;
     self->mouse_move_event_count = 0;
     self->mouse_button_event_count = 0;
+    self->input_trace_count = 0;
+    self->last_mouse_move_trace_id = 0;
+    self->last_mouse_move_x = 0;
+    self->last_mouse_move_y = 0;
+    self->last_mouse_move_us = 0;
     self->input_forwarded_count = 0;
     self->channel_data_event_count = 0;
     self->frame_ack_count = 0;

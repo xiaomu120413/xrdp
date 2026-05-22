@@ -63,6 +63,8 @@ libxrdpohos_la_SOURCES = \
   ohos_capture_raw.cpp \
   ohos_capture_raw.h \
   ohos_capture_types.h \
+  ohos_desktop_size.c \
+  ohos_desktop_size.h \
   ohos_display_geometry.c \
   ohos_events.c \
   ohos_frame.c \

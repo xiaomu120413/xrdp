@@ -11,6 +11,21 @@
 #define OHOS_INPUT_MOUSE_RIGHT_MASK 0x00000004U
 #define OHOS_INPUT_MOUSE_FORWARD_MASK 0x00000008U
 #define OHOS_INPUT_MOUSE_BACK_MASK 0x00000010U
+#define OHOS_INPUT_MOUSE_BUTTON_SLOT_COUNT 5
+
+struct ohos_input_mouse_button_down
+{
+    int active;
+    uint64_t trace_id;
+    long remote_x;
+    long remote_y;
+    int display_x;
+    int display_y;
+    int global_x;
+    int global_y;
+    int64_t action_time_ms;
+    uint64_t move_count;
+};
 
 struct ohos_input_context
 {
@@ -21,6 +36,7 @@ struct ohos_input_context
     uint64_t unmapped_count;
     uint64_t key_sent_count;
     uint64_t mouse_sent_count;
+    uint64_t mouse_move_sent_count;
     uint64_t log_count;
     int pressed_keys[OHOS_INPUT_MAX_PRESSED_KEYS];
     int pressed_key_count;
@@ -30,6 +46,8 @@ struct ohos_input_context
     int last_mouse_y;
     int last_mouse_width;
     int last_mouse_height;
+    struct ohos_input_mouse_button_down
+        button_down[OHOS_INPUT_MOUSE_BUTTON_SLOT_COUNT];
     struct xrdp_ohos_display_geometry geometry;
     uint64_t geometry_query_ms;
 };
@@ -45,11 +63,19 @@ struct ohos_input_mouse_coordinates
     int source_height;
     int target_width;
     int target_height;
+    int full_display_x;
+    int full_display_y;
+    int fit_display_x;
+    int fit_display_y;
     int content_rect_valid;
     int content_left;
     int content_top;
     int content_width;
     int content_height;
+    int content_clamped_x;
+    int content_clamped_y;
+    int inside_content_rect;
+    int content_mapping_active;
     int virtual_pixel_ratio_valid;
     float virtual_pixel_ratio;
 };

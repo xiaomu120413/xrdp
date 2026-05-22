@@ -14,6 +14,17 @@ static xrdp_ohos_backend_event_fn g_ohos_event_callback = 0;
 static void *g_ohos_event_callback_user = 0;
 
 static int
+ohos_should_log_forwarded_input(int msg)
+{
+    return msg == XRDP_OHOS_INPUT_SESSION_CONNECT ||
+           msg == XRDP_OHOS_INPUT_SESSION_DISCONNECT ||
+           msg == XRDP_OHOS_WM_KEYDOWN ||
+           msg == XRDP_OHOS_WM_KEYUP ||
+           (msg >= XRDP_OHOS_WM_LBUTTONUP &&
+            msg <= XRDP_OHOS_WM_XBUTTON2DOWN);
+}
+
+static int
 ohos_ensure_input_mutex(void)
 {
     if (g_ohos_input_mutex == 0)
@@ -46,6 +57,7 @@ ohos_unlock_input_state(void)
 void
 ohos_fill_input_event(struct ohos_mod *self, int msg, tbus param1,
                       tbus param2, tbus param3, tbus param4,
+                      uint64_t trace_id,
                       struct xrdp_ohos_input_event *event)
 {
     if (event == 0)
@@ -55,6 +67,7 @@ ohos_fill_input_event(struct ohos_mod *self, int msg, tbus param1,
 
     event->version = XRDP_OHOS_INPUT_EVENT_VERSION;
     event->msg = msg;
+    event->trace_id = trace_id;
     event->param1 = (long)param1;
     event->param2 = (long)param2;
     event->param3 = (long)param3;
@@ -85,6 +98,9 @@ ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
 
     if (self == 0 || ohos_lock_input_state() != 0)
     {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.input: stage=bridge_forward result=drop reason=lock_or_null msg=%d p=(%ld,%ld,%ld,%ld)",
+            msg, param1, param2, param3, param4);
         return;
     }
 
@@ -94,11 +110,27 @@ ohos_forward_input_event(struct ohos_mod *self, int msg, tbus param1,
 
     if (callback == 0)
     {
+        if (ohos_should_log_forwarded_input(msg))
+        {
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.input: stage=bridge_forward result=skip reason=no_callback msg=%d p=(%ld,%ld,%ld,%ld) forwarded=%llu",
+                msg, param1, param2, param3, param4,
+                (unsigned long long)self->input_forwarded_count);
+        }
         return;
     }
 
     self->input_forwarded_count++;
-    ohos_fill_input_event(self, msg, param1, param2, param3, param4, &event);
+    ohos_fill_input_event(self, msg, param1, param2, param3, param4,
+                          self->input_trace_count, &event);
+    if (ohos_should_log_forwarded_input(msg))
+    {
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.input: stage=bridge_forward result=callback trace=%llu msg=%d p=(%ld,%ld,%ld,%ld) forwarded=%llu",
+            (unsigned long long)event.trace_id, msg,
+            param1, param2, param3, param4,
+            (unsigned long long)self->input_forwarded_count);
+    }
     callback(&event, user_data);
 }
 
