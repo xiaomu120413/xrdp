@@ -29,8 +29,10 @@
 #include "ms-rdpbcgr.h"
 
 #if defined(XRDP_OHOS)
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #else
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #endif
 
@@ -192,18 +194,21 @@ libxrdp_force_read(struct trans *trans)
 
     if (trans_force_read(trans, 4) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "libxrdp_force_read: header read error");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "libxrdp_force_read: header read error");
         return NULL;
     }
     bytes = libxrdp_get_pdu_bytes(s->data);
     if (bytes < 4 || bytes > s->size)
     {
-        LOG(LOG_LEVEL_ERROR, "libxrdp_force_read: bad header length %d", bytes);
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "libxrdp_force_read: bad header length %d", bytes);
         return NULL;
     }
     if (trans_force_read(trans, bytes - 4) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "libxrdp_force_read: Can't read PDU");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "libxrdp_force_read: Can't read PDU");
         return NULL;
     }
     return s;
@@ -267,7 +272,8 @@ libxrdp_process_data(struct xrdp_session *session, struct stream *s)
             }
             if (s == 0)
             {
-                LOG(LOG_LEVEL_ERROR, "libxrdp_process_data: libxrdp_force_read failed");
+                LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+                    "libxrdp_process_data: libxrdp_force_read failed");
                 rv = 1;
                 break;
             }

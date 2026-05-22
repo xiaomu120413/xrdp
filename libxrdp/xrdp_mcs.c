@@ -28,8 +28,10 @@
 #include "log.h"
 
 #if defined(XRDP_OHOS)
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #else
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #endif
 
@@ -373,13 +375,15 @@ xrdp_mcs_recv_connect_initial(struct xrdp_mcs *self)
     s = libxrdp_force_read(self->iso_layer->trans);
     if (s == 0)
     {
-        LOG(LOG_LEVEL_ERROR, "Processing [ITU-T T.125] Connect-Initial failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "Processing [ITU-T T.125] Connect-Initial failed");
         return 1;
     }
 
     if (xrdp_iso_recv(self->iso_layer, s) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "Processing [ITU-T T.125] Connect-Initial failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "Processing [ITU-T T.125] Connect-Initial failed");
         return 1;
     }
 
@@ -1210,7 +1214,8 @@ xrdp_mcs_incoming(struct xrdp_mcs *self)
     LOG(LOG_LEVEL_DEBUG, "[MCS Connection Sequence] receive connection request");
     if (xrdp_mcs_recv_connect_initial(self) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "[MCS Connection Sequence] receive connection request failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "[MCS Connection Sequence] receive connection request failed");
         return 1;
     }
 

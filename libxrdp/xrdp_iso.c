@@ -34,8 +34,10 @@
 #include "log.h"
 
 #if defined(XRDP_OHOS)
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #else
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #endif
 
@@ -525,13 +527,15 @@ xrdp_iso_incoming(struct xrdp_iso *self)
     s = libxrdp_force_read(self->trans);
     if (s == NULL)
     {
-        LOG(LOG_LEVEL_ERROR, "[ITU-T X.224] Connection Sequence: CR-TPDU (Connection Request) failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "[ITU-T X.224] Connection Sequence: CR-TPDU (Connection Request) failed");
         return 1;
     }
 
     if (xrdp_iso_recv_msg(self, s, &code, &len) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "[ITU-T X.224] Connection Sequence: CR-TPDU (Connection Request) failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "[ITU-T X.224] Connection Sequence: CR-TPDU (Connection Request) failed");
         return 1;
     }
 

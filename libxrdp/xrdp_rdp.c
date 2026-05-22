@@ -33,6 +33,12 @@
 #include <freerdp/constants.h>
 #endif
 
+#if defined(XRDP_OHOS)
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
+
 static const char *
 xrdp_rdp_get_cfg_path(void)
 {
@@ -247,6 +253,9 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
         }
         else if (g_strcasecmp(item, "certificate") == 0)
         {
+            int tls_config_active =
+                client_info->security_layer != SECURITY_LAYER_RDP;
+
             g_memset(client_info->certificate, 0, sizeof(char) * 1024);
             if (g_strlen(value) == 0)
             {
@@ -254,7 +263,7 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
                 xrdp_rdp_make_cfg_path(client_info->certificate,
                                        sizeof(client_info->certificate),
                                        "cert.pem");
-                LOG(LOG_LEVEL_INFO,
+                LOG(tls_config_active ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
                     "Using default X.509 certificate: %s",
                     client_info->certificate);
 
@@ -265,7 +274,7 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
                 xrdp_rdp_make_cfg_path(client_info->certificate,
                                        sizeof(client_info->certificate),
                                        "cert.pem");
-                LOG(LOG_LEVEL_WARNING,
+                LOG(tls_config_active ? LOG_LEVEL_WARNING : LOG_LEVEL_DEBUG,
                     "X.509 certificate should use absolute path, using "
                     "default instead: %s", client_info->certificate);
             }
@@ -275,7 +284,7 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
                 g_strncpy(client_info->certificate, value, 1023);
             }
 
-            if (!g_file_readable(client_info->certificate))
+            if (tls_config_active && !g_file_readable(client_info->certificate))
             {
                 LOG(LOG_LEVEL_ERROR, "Cannot read certificate file %s: %s",
                     client_info->certificate, g_get_strerror());
@@ -283,6 +292,9 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
         }
         else if (g_strcasecmp(item, "key_file") == 0)
         {
+            int tls_config_active =
+                client_info->security_layer != SECURITY_LAYER_RDP;
+
             g_memset(client_info->key_file, 0, sizeof(char) * 1024);
             if (g_strlen(value) == 0)
             {
@@ -290,7 +302,8 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
                 xrdp_rdp_make_cfg_path(client_info->key_file,
                                        sizeof(client_info->key_file),
                                        "key.pem");
-                LOG(LOG_LEVEL_INFO, "Using default X.509 key file: %s",
+                LOG(tls_config_active ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
+                    "Using default X.509 key file: %s",
                     client_info->key_file);
             }
             else if (value[0] != '/')
@@ -299,7 +312,7 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
                 xrdp_rdp_make_cfg_path(client_info->key_file,
                                        sizeof(client_info->key_file),
                                        "key.pem");
-                LOG(LOG_LEVEL_WARNING,
+                LOG(tls_config_active ? LOG_LEVEL_WARNING : LOG_LEVEL_DEBUG,
                     "X.509 key file should use absolute path, using "
                     "default instead: %s", client_info->key_file);
             }
@@ -309,7 +322,7 @@ xrdp_rdp_read_config(const char *xrdp_ini, struct xrdp_client_info *client_info)
                 g_strncpy(client_info->key_file, value, 1023);
             }
 
-            if (!g_file_readable(client_info->key_file))
+            if (tls_config_active && !g_file_readable(client_info->key_file))
             {
                 LOG(LOG_LEVEL_ERROR, "Cannot read private key file %s: %s",
                     client_info->key_file, g_get_strerror());
@@ -982,7 +995,8 @@ xrdp_rdp_incoming(struct xrdp_rdp *self)
 
     if (xrdp_sec_incoming(self->sec_layer) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_rdp_incoming: xrdp_sec_incoming failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "xrdp_rdp_incoming: xrdp_sec_incoming failed");
         return 1;
     }
     self->mcs_channel = self->sec_layer->mcs_layer->userid +

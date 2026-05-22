@@ -30,8 +30,10 @@
 #include "string_calls.h"
 
 #if defined(XRDP_OHOS)
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
 #else
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
 #endif
 
@@ -2412,7 +2414,8 @@ xrdp_sec_incoming(struct xrdp_sec *self)
     /* negotiate security layer */
     if (xrdp_iso_incoming(iso) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_sec_incoming: xrdp_iso_incoming failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "xrdp_sec_incoming: xrdp_iso_incoming failed");
         return 1;
     }
 
@@ -2525,7 +2528,8 @@ xrdp_sec_incoming(struct xrdp_sec *self)
     /* negotiate mcs layer */
     if (xrdp_mcs_incoming(self->mcs_layer) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_sec_incoming: xrdp_mcs_incoming failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "xrdp_sec_incoming: xrdp_mcs_incoming failed");
         return 1;
     }
 

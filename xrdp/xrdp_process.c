@@ -24,6 +24,12 @@
 
 #include "xrdp.h"
 
+#if defined(XRDP_OHOS)
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
+
 static int g_session_id = 0;
 
 /*****************************************************************************/
@@ -299,7 +305,8 @@ xrdp_process_main_loop(struct xrdp_process *self)
     }
     else
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_process_main_loop: libxrdp_process_incoming failed");
+        LOG(XRDP_CONNECTION_HANDSHAKE_FAIL_LOG_LEVEL,
+            "xrdp_process_main_loop: libxrdp_process_incoming failed");
         /* this will try to send a disconnect,
            maybe should check that connection got far enough */
         libxrdp_disconnect(self->session, self->errinfo);
