@@ -14,6 +14,7 @@ namespace {
 
 constexpr int32_t kDefaultBitrate = 20000000;
 constexpr int32_t kDefaultIFrameInterval = 1000;
+constexpr int32_t kVideoRangeFull = 1;
 
 } // namespace
 
@@ -63,7 +64,7 @@ void ConfigureSurfaceH264Format(OH_AVFormat* format, const CaptureOptions& optio
     OH_AVFormat_SetIntValue(format, OH_MD_KEY_VIDEO_ENABLE_LOW_LATENCY, 1);
     OH_AVFormat_SetIntValue(format, OH_MD_KEY_VIDEO_ENCODER_ENABLE_B_FRAME, 0);
     OH_AVFormat_SetIntValue(format, OH_MD_KEY_VIDEO_ENCODER_ENABLE_PTS_BASED_RATECONTROL, 1);
-    OH_AVFormat_SetIntValue(format, OH_MD_KEY_RANGE_FLAG, 1);
+    OH_AVFormat_SetIntValue(format, OH_MD_KEY_RANGE_FLAG, kVideoRangeFull);
     OH_AVFormat_SetIntValue(format, OH_MD_KEY_COLOR_PRIMARIES, COLOR_PRIMARY_BT709);
     OH_AVFormat_SetIntValue(format, OH_MD_KEY_TRANSFER_CHARACTERISTICS, TRANSFER_CHARACTERISTIC_BT709);
     OH_AVFormat_SetIntValue(format, OH_MD_KEY_MATRIX_COEFFICIENTS, MATRIX_COEFFICIENT_BT709);
@@ -143,7 +144,8 @@ bool CreateSurfaceH264Encoder(const CaptureOptions& options, OH_AVCodec** outCod
     EmitCaptureInfo("xrdp surface H264 encoder ready name=" + std::string(codecName) +
         " size=" + std::to_string(options.width) + "x" + std::to_string(options.height) +
         " fps=" + std::to_string(options.frameRate) +
-        " bitrate=" + std::to_string(kDefaultBitrate));
+        " bitrate=" + std::to_string(kDefaultBitrate) +
+        " range=full color=bt709 transfer=bt709 matrix=bt709");
     return true;
 }
 

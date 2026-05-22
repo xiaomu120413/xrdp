@@ -741,7 +741,7 @@ ohos_avcodec_configure_encoder(struct ohos_avcodec_global *og,
     ohos_avcodec_request_i_frame(oe);
 
     LOG(LOG_LEVEL_INFO,
-        "xrdp_encoder_ohos_avcodec: hardware H264 encoder ready name=%s size=%dx%d fps=%d bitrate=%d pixelFormat=%d",
+        "xrdp_encoder_ohos_avcodec: hardware H264 encoder ready name=%s size=%dx%d fps=%d bitrate=%d pixelFormat=%d range=full color=bt709 transfer=bt709 matrix=bt709",
         oe->codec_name, width, height, frame_rate, bitrate, pixel_format);
     return 0;
 }

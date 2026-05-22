@@ -92,18 +92,23 @@ SurfaceH264Capture& SurfaceCapture()
 
 bool StartScreenCapture(const CaptureOptions& options, std::string& message, void*)
 {
+    std::string rawMessage;
+    if (RawCapture().Start(options, rawMessage)) {
+        message = rawMessage + " mode=raw-fullrange-avc420";
+        EmitCaptureInfo("xrdp raw/full-range capture selected before surface H264: " + message);
+        return true;
+    }
+
+    EmitCaptureError("xrdp raw capture unavailable, falling back to surface H264 path: " +
+        rawMessage);
     std::string surfaceMessage;
     if (SurfaceCapture().Start(options, surfaceMessage)) {
         message = surfaceMessage;
         return true;
     }
 
-    EmitCaptureError("xrdp surface H264 capture unavailable, falling back to raw path: " +
-        surfaceMessage);
-    std::string rawMessage;
-    const bool rawStarted = RawCapture().Start(options, rawMessage);
-    message = rawStarted ? rawMessage : surfaceMessage + "; raw fallback failed: " + rawMessage;
-    return rawStarted;
+    message = rawMessage + "; surface fallback failed: " + surfaceMessage;
+    return false;
 }
 
 void StopScreenCapture(const std::string& reason, void*)

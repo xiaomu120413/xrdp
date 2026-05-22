@@ -51,6 +51,7 @@ private:
     OH_AVCodec* codec_ = nullptr;
     OHNativeWindow* inputSurface_ = nullptr;
     OH_AVScreenCapture* capture_ = nullptr;
+    OH_VideoSourceType captureSource_ = OH_VIDEO_SOURCE_SURFACE_RGBA;
     std::thread outputThread_;
     CaptureOptions target_;
     std::vector<uint8_t> codecConfig_;
