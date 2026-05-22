@@ -114,6 +114,10 @@ struct ohos_mod
     int h264_drop_count;
     int h264_waiting_for_sync;
     char client_name[256];
+    char access_username[64];
+    char access_code[64];
+    char login_username[256];
+    char login_password[256];
     struct ohos_cursor_state cursor;
     struct ohos_input_context input;
     struct ohos_cliprdr cliprdr;

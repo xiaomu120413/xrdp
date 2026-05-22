@@ -674,10 +674,19 @@ xrdp_wm_init(struct xrdp_wm *self)
 #if defined(XRDP_OHOS)
     if (!do_autologin && autorun_name[0] != 0)
     {
-        do_autologin = 1;
-        LOG(LOG_LEVEL_INFO,
-            "xrdp.ohos.autorun: using autorun section \"%s\" without client credentials",
-            autorun_name);
+        if (self->xrdp_config->cfg_globals.require_credentials)
+        {
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.auth: autorun section \"%s\" requires credentials",
+                autorun_name);
+        }
+        else
+        {
+            do_autologin = 1;
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.autorun: using autorun section \"%s\" without client credentials",
+                autorun_name);
+        }
     }
 #endif
 

@@ -10,6 +10,7 @@ certificate=cert.pem
 key_file=key.pem
 ssl_protocols=TLSv1.2, TLSv1.3
 tls_ciphers=HIGH:!aNULL:!eNULL:!EXPORT:!RC4:!DES:!3DES:!MD5:!PSK:!SRP:!DSS
+require_credentials=true
 autorun=OHOS
 allow_channels=true
 allow_multimon=true
@@ -39,9 +40,11 @@ rail=false
 xrdpvr=false
 
 [OHOS]
-name=HarmonyOS dummy
+name=HarmonyOS remote assistance
 lib=libxrdpohos.@lib_extension@
-username=na
-password=na
+username=askohos
+password=ask
+access_username=ohos
+access_code=
 port=0
 code=0
