@@ -44,10 +44,10 @@ ohos_access_authorized(struct ohos_mod *self)
 {
     if (self->access_code[0] == '\0')
     {
-        LOG(LOG_LEVEL_WARNING,
-            "xrdp.ohos.auth: denied client=%s reason=missing_access_code",
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.auth: access code gate disabled client=%s",
             self->client_name);
-        return 0;
+        return 1;
     }
 
     if (self->login_password[0] == '\0')
