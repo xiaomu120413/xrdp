@@ -672,21 +672,38 @@ xrdp_wm_init(struct xrdp_wm *self)
 
     do_autologin = self->session->client_info->rdp_autologin;
 #if defined(XRDP_OHOS)
-    if (!do_autologin && autorun_name[0] != 0)
+    if (autorun_name[0] != 0 &&
+            self->xrdp_config->cfg_globals.require_credentials)
     {
-        if (self->xrdp_config->cfg_globals.require_credentials)
+        if (do_autologin)
+        {
+            if (self->session->client_info->password[0] == '\0')
+            {
+                do_autologin = 0;
+                LOG(LOG_LEVEL_INFO,
+                    "xrdp.ohos.auth: autorun section \"%s\" waiting for access code",
+                    autorun_name);
+            }
+            else
+            {
+                LOG(LOG_LEVEL_INFO,
+                    "xrdp.ohos.auth: autorun section \"%s\" using client access code",
+                    autorun_name);
+            }
+        }
+        else
         {
             LOG(LOG_LEVEL_INFO,
                 "xrdp.ohos.auth: autorun section \"%s\" requires credentials",
                 autorun_name);
         }
-        else
-        {
-            do_autologin = 1;
-            LOG(LOG_LEVEL_INFO,
-                "xrdp.ohos.autorun: using autorun section \"%s\" without client credentials",
-                autorun_name);
-        }
+    }
+    else if (!do_autologin && autorun_name[0] != 0)
+    {
+        do_autologin = 1;
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.autorun: using autorun section \"%s\" without client credentials",
+            autorun_name);
     }
 #endif
 

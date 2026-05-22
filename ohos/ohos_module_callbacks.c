@@ -42,8 +42,6 @@ ohos_param_log_value(const char *name, const char *value)
 static int
 ohos_access_authorized(struct ohos_mod *self)
 {
-    const char *expected_user;
-
     if (self->access_code[0] == '\0')
     {
         LOG(LOG_LEVEL_WARNING,
@@ -52,26 +50,23 @@ ohos_access_authorized(struct ohos_mod *self)
         return 0;
     }
 
-    expected_user = self->access_username[0] != '\0' ?
-                    self->access_username : "ohos";
-    if (self->login_username[0] == '\0' || self->login_password[0] == '\0')
+    if (self->login_password[0] == '\0')
     {
         LOG(LOG_LEVEL_WARNING,
-            "xrdp.ohos.auth: denied client=%s reason=missing_credentials user=%s",
-            self->client_name, self->login_username);
+            "xrdp.ohos.auth: denied client=%s reason=missing_access_password",
+            self->client_name);
         return 0;
     }
-    if (g_strcmp(self->login_username, expected_user) != 0 ||
-            g_strcmp(self->login_password, self->access_code) != 0)
+    if (g_strcmp(self->login_password, self->access_code) != 0)
     {
         LOG(LOG_LEVEL_WARNING,
-            "xrdp.ohos.auth: denied client=%s reason=invalid_credentials user=%s",
-            self->client_name, self->login_username);
+            "xrdp.ohos.auth: denied client=%s reason=invalid_access_code",
+            self->client_name);
         return 0;
     }
 
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.auth: accepted client=%s user=%s",
-        self->client_name, self->login_username);
+    LOG(LOG_LEVEL_INFO, "xrdp.ohos.auth: accepted client=%s",
+        self->client_name);
     return 1;
 }
 
@@ -264,23 +259,16 @@ ohos_mod_set_param(struct mod *mod, const char *name, const char *value)
 
     if (g_strncmp(name, "client_name", 255) == 0)
     {
-        g_strncpy(self->client_name, value, sizeof(self->client_name));
-    }
-    else if (g_strncmp(name, "username", 255) == 0)
-    {
-        g_strncpy(self->login_username, value, sizeof(self->login_username));
+        g_strncpy(self->client_name, value, sizeof(self->client_name) - 1);
     }
     else if (g_strncmp(name, "password", 255) == 0)
     {
-        g_strncpy(self->login_password, value, sizeof(self->login_password));
-    }
-    else if (g_strncmp(name, "access_username", 255) == 0)
-    {
-        g_strncpy(self->access_username, value, sizeof(self->access_username));
+        g_strncpy(self->login_password, value,
+                  sizeof(self->login_password) - 1);
     }
     else if (g_strncmp(name, "access_code", 255) == 0)
     {
-        g_strncpy(self->access_code, value, sizeof(self->access_code));
+        g_strncpy(self->access_code, value, sizeof(self->access_code) - 1);
     }
 
     LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.module: param %s=%s", name,

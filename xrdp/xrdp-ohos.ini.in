@@ -42,9 +42,8 @@ xrdpvr=false
 [OHOS]
 name=HarmonyOS remote assistance
 lib=libxrdpohos.@lib_extension@
-username=askohos
+username=ohos
 password=ask
-access_username=ohos
 access_code=
 port=0
 code=0
