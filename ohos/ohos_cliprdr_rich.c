@@ -295,7 +295,7 @@ ohos_cliprdr_pasteboard_write_html(struct ohos_cliprdr *cliprdr,
 
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData html record=html+plain html-bytes=%d plain-bytes=%d status=%d(%s)",
         (int)g_strlen(html), plain_value == 0 ? 0 : (int)g_strlen(plain_value),
         rc, ohos_cliprdr_pasteboard_status_name(rc));
@@ -402,7 +402,7 @@ ohos_cliprdr_pasteboard_write_uri(struct ohos_cliprdr *cliprdr, const char *uri)
     }
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData uri record=%s+plain bytes=%d status=%d(%s)",
         hyperlink != 0 ? "hyperlink" : "fileUri",
         (int)g_strlen(uri), rc, ohos_cliprdr_pasteboard_status_name(rc));

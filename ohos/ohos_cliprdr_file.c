@@ -243,7 +243,7 @@ ohos_cliprdr_send_local_file_descriptor(struct ohos_cliprdr *cliprdr)
     s_mark_end(s);
     rv = ohos_cliprdr_send_format_data_response(cliprdr, s->data,
                                                 (int)(s->end - s->data));
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: sent local FileGroupDescriptorW name=%s size=%d rv=%d",
         file.name, file.size, rv);
     free_stream(s);
@@ -308,7 +308,7 @@ ohos_cliprdr_send_local_file_size(struct ohos_cliprdr *cliprdr,
     out_uint32_le(s, 0);
     s_mark_end(s);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: sent local file size stream=%d lindex=%d size=%d rv=%d",
         stream_id, lindex, file.size, rv);
     free_stream(s);

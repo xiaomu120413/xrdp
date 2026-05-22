@@ -127,6 +127,9 @@ uint64_t
 ohos_now_us(void);
 
 int
+ohos_init_frame_state(void);
+
+int
 ohos_lock_frame_state(void);
 
 int

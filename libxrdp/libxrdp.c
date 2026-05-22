@@ -28,6 +28,12 @@
 #include "ms-rdpedisp.h"
 #include "ms-rdpbcgr.h"
 
+#if defined(XRDP_OHOS)
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
+
 #define MAX_BITMAP_BUF_SIZE (16 * 1024) /* 16K */
 #define TS_MONITOR_ATTRIBUTES_SIZE 20 /* [MS-RDPBCGR] 2.2.1.3.9 */
 
@@ -1520,7 +1526,8 @@ libxrdp_send_to_channel(struct xrdp_session *session, int channel_id,
 
     if (xrdp_channel_send(chan, s, channel_id, total_data_len, flags) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "libxrdp_send_to_channel: xrdp_channel_send failed");
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
+            "libxrdp_send_to_channel: xrdp_channel_send failed");
         free_stream(s);
         return 1;
     }

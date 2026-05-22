@@ -33,6 +33,11 @@
 #include "string_calls.h"
 #include "log.h"
 
+#if defined(XRDP_OHOS)
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
 
 /*****************************************************************************/
 /**
@@ -670,7 +675,8 @@ xrdp_iso_send(struct xrdp_iso *self, struct stream *s)
 
     if (trans_write_copy_s(self->trans, s) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_iso_send: trans_write_copy_s failed");
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
+            "xrdp_iso_send: trans_write_copy_s failed");
         return 1;
     }
 

@@ -385,7 +385,7 @@ void SurfaceH264Capture::StoreCodecConfig(const uint8_t* data, size_t bytes)
         std::lock_guard<std::mutex> lock(mutex_);
         codecConfig_ = std::move(normalized);
     }
-    EmitCaptureInfo("xrdp surface H264 stored codec config bytes=" + std::to_string(bytes));
+    EmitCaptureDebug("xrdp surface H264 stored codec config bytes=" + std::to_string(bytes));
 }
 
 void SurfaceH264Capture::AppendOutputPayload(const uint8_t* data, size_t bytes)
@@ -441,7 +441,7 @@ void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
             RequestKeyFrame("xrdp h264 backpressure");
         }
         if (dropped <= 5 || (dropped % 120U) == 0U) {
-            EmitCaptureInfo("xrdp surface H264 frame not queued: " + message +
+            EmitCaptureDebug("xrdp surface H264 frame not queued: " + message +
                 " bytes=" + std::to_string(payload.size()) +
                 " dropped=" + std::to_string(dropped));
         }

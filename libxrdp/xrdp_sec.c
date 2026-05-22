@@ -29,6 +29,12 @@
 #include "log.h"
 #include "string_calls.h"
 
+#if defined(XRDP_OHOS)
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
+
 static const char *
 xrdp_sec_get_cfg_path(void)
 {
@@ -1483,7 +1489,8 @@ xrdp_sec_send(struct xrdp_sec *self, struct stream *s, int chan)
 
     if (xrdp_mcs_send(self->mcs_layer, s, chan) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_sec_send: xrdp_mcs_send failed");
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
+            "xrdp_sec_send: xrdp_mcs_send failed");
         return 1;
     }
 

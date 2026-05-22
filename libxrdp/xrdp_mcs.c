@@ -27,6 +27,12 @@
 #include "ms-rdpbcgr.h"
 #include "log.h"
 
+#if defined(XRDP_OHOS)
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
+
 /* Forward references */
 static int
 handle_channel_join_requests(struct xrdp_mcs *self,
@@ -1357,7 +1363,8 @@ xrdp_mcs_send(struct xrdp_mcs *self, struct stream *s, int chan)
               self->userid, chan, 0x70 >> 6, (0x70 >> 4) & 0x03);
     if (xrdp_iso_send(self->iso_layer, s) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_mcs_send: xrdp_iso_send failed");
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
+            "xrdp_mcs_send: xrdp_iso_send failed");
         return 1;
     }
 

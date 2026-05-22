@@ -175,7 +175,7 @@ xrdp_ohos_backend_set_input_callback(xrdp_ohos_input_event_fn callback,
     g_ohos_input_callback_user = user_data;
     ohos_unlock_input_state();
 
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.input: callback %s",
+    LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.input: callback %s",
         callback == 0 ? "cleared" : "registered");
     return 0;
 }
@@ -193,7 +193,7 @@ xrdp_ohos_backend_set_event_callback(xrdp_ohos_backend_event_fn callback,
     g_ohos_event_callback_user = user_data;
     ohos_unlock_input_state();
 
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.event: callback %s",
+    LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.event: callback %s",
         callback == 0 ? "cleared" : "registered");
     return 0;
 }

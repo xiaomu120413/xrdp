@@ -153,12 +153,12 @@ ohos_cliprdr_read_local_image(struct ohos_cliprdr *cliprdr, int format_id,
     *bytes = 0;
     if (ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: local image read failed: no URI data format=%d(%s)",
             format_id, ohos_cliprdr_format_display_name(format_id));
         return 1;
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: local image read start format=%d(%s) uri=%s",
         format_id, ohos_cliprdr_format_display_name(format_id), uri);
     if (format_id == CF_DIB &&
@@ -169,7 +169,7 @@ ohos_cliprdr_read_local_image(struct ohos_cliprdr *cliprdr, int format_id,
         g_free(bgra);
         if (*data != 0)
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.cliprdr: copied local URI image directly uri=%s bytes=%d",
                 uri, *bytes);
             g_free(uri);
@@ -182,7 +182,7 @@ ohos_cliprdr_read_local_image(struct ohos_cliprdr *cliprdr, int format_id,
     if (path == 0 || ohos_cliprdr_read_file_bytes(path, &file_data,
             &file_bytes) != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: local image read failed: cannot read path=%s",
             path == 0 ? "" : path);
         g_free(path);
@@ -195,7 +195,7 @@ ohos_cliprdr_read_local_image(struct ohos_cliprdr *cliprdr, int format_id,
     {
         *data = file_data;
         *bytes = file_bytes;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: local image read raw format=%d(%s) bytes=%d",
             file_format, ohos_cliprdr_format_display_name(file_format),
             file_bytes);
@@ -206,7 +206,7 @@ ohos_cliprdr_read_local_image(struct ohos_cliprdr *cliprdr, int format_id,
                                                    &bgra, &width,
                                                    &height) != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: local image read failed: decode file-format=%d(%s) requested=%d(%s)",
             file_format, ohos_cliprdr_format_display_name(file_format),
             format_id, ohos_cliprdr_format_display_name(format_id));
@@ -216,7 +216,7 @@ ohos_cliprdr_read_local_image(struct ohos_cliprdr *cliprdr, int format_id,
     g_free(file_data);
     *data = ohos_cliprdr_bgra_to_dib(bgra, width, height, bytes);
     g_free(bgra);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: local image read converted to DIB %ux%u bytes=%d ok=%d",
         width, height, bytes == 0 ? 0 : *bytes, *data != 0);
     return *data == 0 ? 1 : 0;
@@ -245,7 +245,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     {
         return 1;
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote image write start kind=%s(%d) bytes=%d",
         ohos_cliprdr_request_kind_name(request_kind), request_kind, bytes);
     if (request_kind == OHOS_CLIPRDR_REQUEST_DIB)
@@ -264,7 +264,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
                                                        &pixelmap, &width,
                                                        &height) != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote image write decode failed kind=%s source-format=%d(%s) source-bytes=%d",
             ohos_cliprdr_request_kind_name(request_kind), source_format,
             ohos_cliprdr_format_display_name(source_format), source_bytes);
@@ -305,7 +305,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     }
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, udmf);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData image kind=%s source=%d(%s) record=pixelmap%s %ux%u bytes=%d uri=%s status=%d(%s)",
         ohos_cliprdr_request_kind_name(request_kind), source_format,
         ohos_cliprdr_format_display_name(source_format),

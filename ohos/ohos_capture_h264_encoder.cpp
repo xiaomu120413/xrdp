@@ -166,7 +166,7 @@ void RequestSurfaceH264KeyFrame(OH_AVCodec* codec, const char* reason)
             " rc=" + VideoEncoderErrToString(rc));
         return;
     }
-    EmitCaptureInfo("xrdp surface H264 requested key frame reason=" +
+    EmitCaptureDebug("xrdp surface H264 requested key frame reason=" +
         std::string(reason == nullptr ? "unknown" : reason));
 }
 

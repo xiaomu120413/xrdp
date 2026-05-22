@@ -121,7 +121,7 @@ ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
 
     cliprdr->requested_format = format_id;
     cliprdr->requested_kind = request_kind;
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: requesting remote clipboard data format=%d(%s) kind=%s(%d)",
         format_id, ohos_cliprdr_format_display_name(format_id),
         ohos_cliprdr_request_kind_name(request_kind), request_kind);
@@ -268,7 +268,7 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     if (rv == 0)
     {
         cliprdr->local_format_lists_sent++;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: sent local formats text=%d html=%d uri=%d image=%d image-format=%d(%s) file=%d reason=%s",
             has_text, has_html, has_uri, has_image, image_format,
             ohos_cliprdr_format_display_name(image_format),

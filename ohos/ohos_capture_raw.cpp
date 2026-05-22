@@ -418,7 +418,7 @@ void RawScreenCapture::QueueMappedFrame(const OH_NativeBuffer_Config& config, co
     } else if (message != "xrdp server is not running") {
         const uint64_t dropped = droppedCount_.fetch_add(1) + 1;
         if (dropped <= 3 || (dropped % 120U) == 0U) {
-            EmitCaptureInfo("xrdp screen capture frame not queued: " + message +
+            EmitCaptureDebug("xrdp screen capture frame not queued: " + message +
                 " dropped=" + std::to_string(dropped));
         }
     }

@@ -371,7 +371,7 @@ ohos_input_release_pressed_keys(struct ohos_input_context *ctx)
         i = ctx->pressed_key_count - 1;
         key_code = ctx->pressed_keys[i];
         rc = ohos_input_inject_key_code(key_code, 0);
-        LOG(rc == INPUT_SUCCESS ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+        LOG(rc == INPUT_SUCCESS ? LOG_LEVEL_DEBUG : LOG_LEVEL_ERROR,
             "xrdp.ohos.input: release key key_code=%d rc=%d",
             key_code, rc);
         ctx->pressed_key_count--;
@@ -399,7 +399,7 @@ ohos_input_release_mouse_button(struct ohos_input_context *ctx, uint32_t mask)
     dispatch = ohos_input_map_mouse(&event);
     ohos_input_resolve_mouse_coordinates(ctx, &event, &coords);
     rc = ohos_input_inject_mouse(ctx, &event, &dispatch, &coords);
-    LOG(rc == INPUT_SUCCESS ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+    LOG(rc == INPUT_SUCCESS ? LOG_LEVEL_DEBUG : LOG_LEVEL_ERROR,
         "xrdp.ohos.input: release mouse mask=0x%8.8x rc=%d",
         mask, rc);
 }
@@ -442,7 +442,7 @@ ohos_input_reset(struct ohos_input_context *ctx, const char *reason)
     }
     else if (ctx->pressed_key_count > 0 || pressed_buttons != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.input: clear pressed state without release reason=%s keys=%d buttons=0x%8.8x",
             reason == 0 ? "" : reason, ctx->pressed_key_count,
             pressed_buttons);

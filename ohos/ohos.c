@@ -8,44 +8,9 @@
 
 #include "arch.h"
 #include "os_calls.h"
-#include "thread_calls.h"
 #include "log.h"
 
 #include "ohos_private.h"
-
-tbus g_ohos_frame_mutex = 0;
-struct ohos_mod *g_ohos_active_mod = 0;
-int g_ohos_frame_sequence = 0;
-
-static int
-ohos_ensure_frame_mutex(void)
-{
-    if (g_ohos_frame_mutex == 0)
-    {
-        g_ohos_frame_mutex = tc_mutex_create();
-    }
-    return g_ohos_frame_mutex != 0;
-}
-
-int
-ohos_lock_frame_state(void)
-{
-    if (!ohos_ensure_frame_mutex())
-    {
-        return 1;
-    }
-    return tc_mutex_lock(g_ohos_frame_mutex);
-}
-
-int
-ohos_unlock_frame_state(void)
-{
-    if (g_ohos_frame_mutex == 0)
-    {
-        return 1;
-    }
-    return tc_mutex_unlock(g_ohos_frame_mutex);
-}
 
 tintptr EXPORT_CC
 mod_init(void)
@@ -53,7 +18,7 @@ mod_init(void)
     struct ohos_mod *self;
 
     self = (struct ohos_mod *)g_malloc(sizeof(struct ohos_mod), 1);
-    ohos_ensure_frame_mutex();
+    ohos_init_frame_state();
     self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
     ohos_input_init(&self->input);
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
@@ -75,6 +40,10 @@ mod_exit(tintptr handle)
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: exit");
     if (self != 0)
     {
+        if (self->connected)
+        {
+            ohos_log_session_summary(self, "module_exit");
+        }
         if (ohos_lock_frame_state() == 0)
         {
             if (g_ohos_active_mod == self)

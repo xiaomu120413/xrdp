@@ -66,6 +66,7 @@ libxrdpohos_la_SOURCES = \
   ohos_h264_payload.cpp \
   ohos_h264_payload.h \
   ohos_session.c \
+  ohos_state.c \
   ohos_input.c \
   ohos_input_auth.c \
   ohos_input.h \

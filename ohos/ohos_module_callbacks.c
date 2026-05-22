@@ -167,7 +167,7 @@ ohos_mod_end(struct mod *mod)
     ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_DISCONNECT,
                                0, 0, 0, 0, 0, 0, 0);
     ohos_forward_input_event(self, XRDP_OHOS_INPUT_SESSION_DISCONNECT, 0, 0, 0, 0);
-    ohos_log_session_summary(self, "disconnect");
+    ohos_log_session_summary(self, "client_disconnect");
     ohos_input_reset(&self->input, "session end");
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);

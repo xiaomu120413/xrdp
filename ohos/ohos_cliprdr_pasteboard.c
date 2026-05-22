@@ -259,7 +259,7 @@ ohos_cliprdr_pasteboard_write_plain_text(struct ohos_cliprdr *cliprdr,
     }
 
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData text record=plain bytes=%d status=%d(%s)",
         text == 0 ? 0 : (int)g_strlen(text),
         rc, ohos_cliprdr_pasteboard_status_name(rc));

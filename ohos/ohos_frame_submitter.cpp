@@ -455,7 +455,7 @@ void FrameSubmitter::WorkerLoop()
             }
         } else if (status == XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION) {
             if (failed <= 3 || (failed % 120U) == 0U) {
-                EmitSubmitterInfo("xrdp video frame skipped: no active mstsc session status=-4 count=" +
+                EmitSubmitterDebug("xrdp video frame skipped: no active mstsc session status=-4 count=" +
                     std::to_string(failed));
             }
         } else if (failed <= 3 || (failed % 120U) == 0U) {

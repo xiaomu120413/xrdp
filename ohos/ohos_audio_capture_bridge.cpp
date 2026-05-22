@@ -287,7 +287,7 @@ bool AudioCapturePump::ProcessOneAudioBuffer(OH_AVScreenCapture* capture,
     } else if (message != "xrdp server is not running") {
         const uint64_t dropped = ++audioDroppedCount_;
         if (dropped <= 3 || (dropped % 120U) == 0U) {
-            EmitInfo("xrdp audio capture not queued: " + message +
+            EmitDebug("xrdp audio capture not queued: " + message +
                 " bytes=" + std::to_string(frame.bytes) +
                 " dropped=" + std::to_string(dropped));
         }

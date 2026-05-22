@@ -174,7 +174,7 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
         requested = text_format;
         requested_kind = OHOS_CLIPRDR_REQUEST_TEXT;
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote format summary count=%d text=%d html=%d uriw=%d uri-list=%d image-dib=%d image-bmp=%d image-png=%d image-jpeg=%d image-webp=%d file-desc=%d file-contents=%d selected=%d(%s) kind=%s(%d)",
         format_count, text_format, cliprdr->remote_html_format,
         cliprdr->remote_uriw_format, cliprdr->remote_uri_list_format,
@@ -191,7 +191,7 @@ ohos_cliprdr_process_format_list(struct ohos_cliprdr *cliprdr,
                                                      requested_kind);
     }
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote format list has no supported format");
     return 0;
 }
@@ -283,7 +283,7 @@ ohos_cliprdr_process_format_data_request(struct ohos_cliprdr *cliprdr,
         }
     }
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote requested local format=%d bytes=%d ok=%d",
         format_id, bytes, data != 0);
     rv = ohos_cliprdr_send_format_data_response(cliprdr, data, bytes);
@@ -311,7 +311,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
     if ((msg_flags & CB_RESPONSE_FAIL) != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_WARNING,
             "xrdp.ohos.cliprdr: remote data response failed format=%d",
             format_id);
         return 0;
@@ -321,7 +321,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     {
         return 1;
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote data response format=%d(%s) kind=%s(%d) bytes=%d flags=0x%08x",
         format_id, ohos_cliprdr_format_display_name(format_id),
         ohos_cliprdr_request_kind_name(request_kind), request_kind,
@@ -334,7 +334,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
         {
             rv = ohos_cliprdr_pasteboard_write_html(cliprdr, html, 0);
         }
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote html response html-bytes=%d write-rv=%d",
             html == 0 ? 0 : (int)g_strlen(html), rv);
         g_free(html);
@@ -347,7 +347,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
         {
             rv = ohos_cliprdr_pasteboard_write_uri(cliprdr, uri);
         }
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote uriw response uri-bytes=%d write-rv=%d",
             uri == 0 ? 0 : (int)g_strlen(uri), rv);
         g_free(uri);
@@ -364,7 +364,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
         {
             rv = ohos_cliprdr_pasteboard_write_uri(cliprdr, uri);
         }
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote uri-list response uri-bytes=%d write-rv=%d",
             uri == 0 ? 0 : (int)g_strlen(uri), rv);
         g_free(uri);
@@ -378,7 +378,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     {
         rv = ohos_cliprdr_write_remote_image(cliprdr, request_kind,
                                              s->p, data_len);
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote image response kind=%s bytes=%d write-rv=%d",
             ohos_cliprdr_request_kind_name(request_kind), data_len, rv);
         if (rv == 0)
@@ -391,7 +391,7 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
     {
         rv = ohos_cliprdr_process_remote_file_descriptor(cliprdr, s->p,
                                                          data_len);
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote FileGroupDescriptorW response bytes=%d rv=%d",
             data_len, rv);
         return rv;
@@ -415,20 +415,20 @@ ohos_cliprdr_process_format_data_response(struct ohos_cliprdr *cliprdr,
 
     if (text == 0 || text[0] == '\0')
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote text response was empty");
         g_free(text);
         return 0;
     }
 
     rv = ohos_cliprdr_pasteboard_write_plain_text(cliprdr, text);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote text response text-bytes=%d write-rv=%d",
         (int)g_strlen(text), rv);
     if (rv == 0)
     {
         cliprdr->remote_responses_received++;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: copied remote text to Pasteboard bytes=%d",
             (int)g_strlen(text));
     }

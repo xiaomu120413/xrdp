@@ -229,7 +229,7 @@ ohos_cliprdr_complete_remote_file(struct ohos_cliprdr *cliprdr)
         cliprdr->remote_file_fd = -1;
     }
     file->uri = ohos_cliprdr_path_to_file_uri(file->path);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: completed remote file index=%d name=%s size=%d uri=%s",
         cliprdr->remote_file_index, file->name, file->size,
         file->uri == 0 ? "" : file->uri);
@@ -254,7 +254,7 @@ ohos_cliprdr_request_next_remote_file(struct ohos_cliprdr *cliprdr)
 
     cliprdr->remote_file_offset = 0;
     file = cliprdr->remote_files + cliprdr->remote_file_index;
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: start remote file index=%d/%d name=%s descriptor-size=%d",
         cliprdr->remote_file_index, cliprdr->remote_file_count,
         file->name == 0 ? "" : file->name, file->size);
@@ -279,7 +279,10 @@ ohos_cliprdr_open_remote_file(struct ohos_cliprdr *cliprdr, int size)
     if (cliprdr->remote_file_fd < 0)
     {
         LOG(LOG_LEVEL_ERROR,
-            "xrdp.ohos.cliprdr: cannot create remote file cache path=%s",
+            "xrdp.ohos.cliprdr: cannot create remote file cache index=%d",
+            cliprdr->remote_file_index);
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.cliprdr: remote file cache create failed path=%s",
             file->path);
         return 1;
     }
@@ -322,7 +325,7 @@ ohos_cliprdr_process_remote_file_descriptor(struct ohos_cliprdr *cliprdr,
     }
     if (count <= 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote FileGroupDescriptorW empty citems=%d bytes=%d",
             citems, bytes);
         return 1;
@@ -365,7 +368,7 @@ ohos_cliprdr_process_remote_file_descriptor(struct ohos_cliprdr *cliprdr,
         cliprdr->remote_files[index].name =
             ohos_cliprdr_remote_safe_name(name);
         cliprdr->remote_files[index].size = size_high == 0 ? size_low : -1;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote file descriptor index=%d name=%s size=%d size-high=%d",
             index, cliprdr->remote_files[index].name == 0 ? "" :
             cliprdr->remote_files[index].name, size_low, size_high);
@@ -388,14 +391,14 @@ ohos_cliprdr_process_remote_filecontents_response(struct ohos_cliprdr *cliprdr,
 
     if (cliprdr->remote_file_pending == OHOS_CLIPRDR_REMOTE_FILE_NONE)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: ignored remote filecontents response without pending request");
         return 0;
     }
     if ((msg_flags & CB_RESPONSE_FAIL) != 0 || data_len < 4 ||
             !s_check_rem_and_log(s, data_len, "OHOS cliprdr file response"))
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_WARNING,
             "xrdp.ohos.cliprdr: remote filecontents response failed flags=0x%08x len=%d",
             msg_flags, data_len);
         ohos_cliprdr_file_transfer_reset(cliprdr);
@@ -404,7 +407,7 @@ ohos_cliprdr_process_remote_filecontents_response(struct ohos_cliprdr *cliprdr,
     in_uint32_le(s, stream_id);
     if (stream_id != cliprdr->remote_file_stream_id)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_WARNING,
             "xrdp.ohos.cliprdr: remote filecontents stream mismatch got=%d expected=%d",
             stream_id, cliprdr->remote_file_stream_id);
         ohos_cliprdr_file_transfer_reset(cliprdr);
@@ -419,7 +422,7 @@ ohos_cliprdr_process_remote_filecontents_response(struct ohos_cliprdr *cliprdr,
         }
         in_uint32_le(s, size_low);
         in_uint32_le(s, size_high);
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote file size response stream=%d size=%d high=%d",
             stream_id, size_low, size_high);
         if (size_high != 0 || size_low < 0)

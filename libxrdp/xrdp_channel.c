@@ -26,6 +26,12 @@
 #include "string_calls.h"
 #include "xrdp_channel.h"
 
+#if defined(XRDP_OHOS)
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_DEBUG
+#else
+#define XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL LOG_LEVEL_ERROR
+#endif
+
 #define CMD_DVC_OPEN_CHANNEL    0x10
 #define CMD_DVC_DATA_FIRST      0x20
 #define CMD_DVC_DATA            0x30
@@ -149,7 +155,8 @@ xrdp_channel_send(struct xrdp_channel *self, struct stream *s, int channel_id,
 
     if (xrdp_sec_send(self->sec_layer, s, channel->chanid) != 0)
     {
-        LOG(LOG_LEVEL_ERROR, "xrdp_channel_send: xrdp_sec_send failed");
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
+            "xrdp_channel_send: xrdp_sec_send failed");
         return 1;
     }
 
@@ -748,7 +755,7 @@ xrdp_channel_drdynvc_send_capability_request(struct xrdp_channel *self)
               "PriorityCharge1 0, PriorityCharge2 0, PriorityCharge3 0");
     if (xrdp_channel_send(self, s, channel_id, total_data_len, flags) != 0)
     {
-        LOG(LOG_LEVEL_ERROR,
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
             "xrdp_channel_drdynvc_send_capability_request: xrdp_channel_send failed");
         free_stream(s);
         return 1;
@@ -953,7 +960,7 @@ xrdp_channel_drdynvc_close(struct xrdp_channel *self, int chan_id)
     if (xrdp_channel_send(self, s, static_channel_id, total_data_len,
                           static_flags) != 0)
     {
-        LOG(LOG_LEVEL_ERROR,
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
             "xrdp_channel_drdynvc_open: xrdp_channel_send failed");
         free_stream(s);
         return 1;
@@ -1028,7 +1035,7 @@ xrdp_channel_drdynvc_data_first(struct xrdp_channel *self, int chan_id,
     if (xrdp_channel_send(self, s, static_channel_id, total_data_len,
                           static_flags) != 0)
     {
-        LOG(LOG_LEVEL_ERROR,
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
             "xrdp_channel_drdynvc_data_first: xrdp_channel_send failed");
         free_stream(s);
         return 1;
@@ -1099,7 +1106,7 @@ xrdp_channel_drdynvc_data(struct xrdp_channel *self, int chan_id,
     if (xrdp_channel_send(self, s, static_channel_id, total_data_len,
                           static_flags) != 0)
     {
-        LOG(LOG_LEVEL_ERROR,
+        LOG(XRDP_TRANSPORT_SEND_FAIL_LOG_LEVEL,
             "xrdp_channel_drdynvc_data: xrdp_channel_send failed");
         free_stream(s);
         return 1;

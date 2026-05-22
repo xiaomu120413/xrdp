@@ -122,7 +122,7 @@ ohos_cliprdr_write_remote_file_uris(struct ohos_cliprdr *cliprdr)
     }
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData remote files count=%d status=%d(%s)",
         uri_count, rc, ohos_cliprdr_pasteboard_status_name(rc));
     if (rc != ERR_OK)
