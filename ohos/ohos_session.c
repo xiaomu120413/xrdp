@@ -110,14 +110,27 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
     }
 
     LOG(LOG_LEVEL_INFO,
-        "xrdp.ohos.session: summary reason=%s client=%s duration_ms=%llu size=%dx%d bpp=%d frames_drawn=%d raw_submitted=%llu h264_submitted=%llu h264_queue=%d h264_dropped=%d h264_waiting_sync=%d",
-        reason == 0 ? "" : reason, self->client_name,
-        (unsigned long long)duration_ms, self->width, self->height, self->bpp,
-        self->frame_draw_count,
+        "xrdp.ohos.session: disconnect summary reason=%s duration_ms=%llu desktop=%dx%d bpp=%d frames_drawn=%d raw_frames=%llu h264_frames=%llu h264_dropped=%d audio_frames=%llu audio_bytes=%llu audio_dropped=%d input_sent=%llu input_dropped=%llu input_unmapped=%llu cliprdr_reads=%u cliprdr_writes=%u cliprdr_errors=%u",
+        reason == 0 ? "" : reason,
+        (unsigned long long)duration_ms, self->width, self->height,
+        self->bpp, self->frame_draw_count,
         (unsigned long long)self->raw_frame_submit_count,
         (unsigned long long)self->h264_frame_submit_count,
-        h264_queue_count, h264_drop_count, h264_waiting_for_sync);
-    LOG(LOG_LEVEL_INFO,
+        h264_drop_count,
+        (unsigned long long)self->audio_frame_submit_count,
+        (unsigned long long)self->audio_bytes_submitted,
+        self->rdpsnd.dropped_buffers,
+        (unsigned long long)self->input.sent_count,
+        (unsigned long long)self->input.dropped_count,
+        (unsigned long long)self->input.unmapped_count,
+        self->cliprdr.pasteboard_reads, self->cliprdr.pasteboard_writes,
+        self->cliprdr.errors);
+    LOG(LOG_LEVEL_DEBUG,
+        "xrdp.ohos.session: frame detail client=%s h264_queue=%d h264_waiting_sync=%d rdpsnd_submitted=%u rdpsnd_sent_chunks=%u rdpsnd_sent_bytes=%u rdpsnd_errors=%u",
+        self->client_name, h264_queue_count, h264_waiting_for_sync,
+        self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,
+        self->rdpsnd.sent_bytes, self->rdpsnd.errors);
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.session: input keys=%llu key_sync=%llu mouse_move=%llu mouse_button=%llu forwarded=%llu channel_data=%llu frame_ack=%llu suppress=%llu resize=%llu full_invalidate=%llu",
         (unsigned long long)self->key_event_count,
         (unsigned long long)self->key_sync_event_count,
@@ -130,7 +143,7 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
         (unsigned long long)self->monitor_resize_count,
         (unsigned long long)self->monitor_full_invalidate_count);
     ohos_input_log_summary(&self->input, reason);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.session: rdpsnd submitted=%u sent_chunks=%u sent_bytes=%u dropped=%d errors=%u app_audio_frames=%llu app_audio_bytes=%llu cliprdr local_lists=%u remote_lists=%u local_requests=%u remote_responses=%u pb_reads=%u pb_writes=%u pb_changes=%u suppressed=%u errors=%u",
         self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,
         self->rdpsnd.sent_bytes, self->rdpsnd.dropped_buffers,

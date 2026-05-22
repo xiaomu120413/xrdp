@@ -71,6 +71,7 @@ libxrdpohos_la_SOURCES = \
   ohos_input.h \
   ohos_input_keymap.c \
   ohos_input_mouse.c \
+  ohos_module_callbacks.c \
   ohos_rdpsnd.c \
   ohos_rdpsnd_channel.c \
   ohos_rdpsnd.h \

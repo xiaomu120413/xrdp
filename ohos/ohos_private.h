@@ -145,6 +145,9 @@ void
 ohos_log_session_summary(struct ohos_mod *self, const char *reason);
 
 void
+ohos_bind_mod_callbacks(struct ohos_mod *self);
+
+void
 ohos_free_h264_frame(struct ohos_queued_h264_frame *frame);
 
 void

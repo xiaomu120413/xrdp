@@ -425,7 +425,7 @@ ohos_clear_frame(struct ohos_mod *self, const char *reason)
     rv |= ohos_fill_rect(mod, 0x000000, 0, 0, self->width, self->height);
     rv |= mod->server_end_update(mod);
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.frame: cleared frame %dx%d bpp=%d rv=%d reason=%s",
         self->width, self->height, self->bpp, rv,
         reason == 0 ? "" : reason);

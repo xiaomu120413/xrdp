@@ -461,7 +461,7 @@ ohos_input_log_summary(const struct ohos_input_context *ctx, const char *reason)
         return;
     }
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.input: summary reason=%s handled=%llu sent=%llu key_sent=%llu mouse_sent=%llu dropped=%llu auth_pending=%llu unmapped=%llu pressed_keys=%d pressed_buttons=0x%8.8x",
         reason == 0 ? "" : reason,
         (unsigned long long)ctx->handled_count,
