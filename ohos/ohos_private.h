@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "ohos_cliprdr.h"
+#include "ohos_cursor.h"
 #include "ohos_gfx_avc420.h"
 #include "ohos_input.h"
 #include "ohos_rdpsnd.h"
@@ -113,6 +114,7 @@ struct ohos_mod
     int h264_drop_count;
     int h264_waiting_for_sync;
     char client_name[256];
+    struct ohos_cursor_state cursor;
     struct ohos_input_context input;
     struct ohos_cliprdr cliprdr;
     struct ohos_rdpsnd rdpsnd;

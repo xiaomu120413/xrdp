@@ -44,6 +44,13 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_protocol.c \
   ohos_cliprdr_rich.c \
   ohos_cliprdr_transfer.c \
+  ohos_cursor.c \
+  ohos_cursor.h \
+  ohos_cursor_image.c \
+  ohos_cursor_image.h \
+  ohos_cursor_state.c \
+  ohos_cursor_system.c \
+  ohos_cursor_system.h \
   ohos_capture_common.cpp \
   ohos_capture_common.h \
   ohos_capture_controller.cpp \

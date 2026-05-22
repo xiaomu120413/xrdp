@@ -20,6 +20,7 @@ mod_init(void)
     self = (struct ohos_mod *)g_malloc(sizeof(struct ohos_mod), 1);
     ohos_init_frame_state();
     self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
+    ohos_cursor_init(&self->cursor);
     ohos_input_init(&self->input);
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
     ohos_rdpsnd_init(&self->rdpsnd, &self->mod, self->frame_wait_obj);
@@ -43,6 +44,7 @@ mod_exit(tintptr handle)
         if (self->connected)
         {
             ohos_log_session_summary(self, "module_exit");
+            ohos_cursor_end_session(self, "module_exit");
         }
         if (ohos_lock_frame_state() == 0)
         {

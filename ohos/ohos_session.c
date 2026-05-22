@@ -80,6 +80,7 @@ ohos_reset_session_stats(struct ohos_mod *self)
     self->frame_draw_count = 0;
     self->h264_drop_count = 0;
     self->h264_waiting_for_sync = 0;
+    ohos_cursor_init(&self->cursor);
 }
 
 void

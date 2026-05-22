@@ -51,6 +51,7 @@ ohos_mod_connect(struct mod *mod, int fd)
 
     LOG(LOG_LEVEL_INFO, "xrdp.ohos.module: connect fd=%d client=%s",
         fd, self->client_name);
+    ohos_cursor_start_session(self);
     ohos_input_prime_authorization("session connect");
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
@@ -71,6 +72,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
 {
     struct ohos_mod *self = ohos_from_mod(mod);
     struct xrdp_ohos_input_event input_event;
+    int input_rc;
 
     switch (msg)
     {
@@ -147,7 +149,11 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
 
     ohos_fill_input_event(self, msg, param1, param2, param3, param4,
                           &input_event);
-    (void)ohos_input_handle_event(&self->input, &input_event);
+    input_rc = ohos_input_handle_event(&self->input, &input_event);
+    if (input_rc == 0)
+    {
+        ohos_cursor_handle_pointer_event(self, msg, param1, param2);
+    }
     ohos_forward_input_event(self, msg, param1, param2, param3, param4);
     return 0;
 }
@@ -168,6 +174,7 @@ ohos_mod_end(struct mod *mod)
                                0, 0, 0, 0, 0, 0, 0);
     ohos_forward_input_event(self, XRDP_OHOS_INPUT_SESSION_DISCONNECT, 0, 0, 0, 0);
     ohos_log_session_summary(self, "client_disconnect");
+    ohos_cursor_end_session(self, "client_disconnect");
     ohos_input_reset(&self->input, "session end");
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
@@ -236,6 +243,7 @@ ohos_mod_check_wait_objs(struct mod *mod)
     }
     rv |= ohos_rdpsnd_check_wait_objs(&self->rdpsnd);
     rv |= ohos_cliprdr_check_wait_objs(&self->cliprdr);
+    rv |= ohos_cursor_check_wait_objs(self);
     return rv;
 }
 
