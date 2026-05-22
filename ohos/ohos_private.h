@@ -180,4 +180,8 @@ ohos_forward_backend_event(struct ohos_mod *self, int type, int suppress,
                            int left, int top, int right, int bottom,
                            int frame_id, int flags);
 
+void
+ohos_capture_handle_backend_event(
+    const struct xrdp_ohos_backend_event *event);
+
 #endif

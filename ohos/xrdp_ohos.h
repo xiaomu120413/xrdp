@@ -28,6 +28,8 @@ extern "C"
 #define XRDP_OHOS_FEATURE_RDPSND 0x00000040U
 #define XRDP_OHOS_FEATURE_DISPLAY_GEOMETRY 0x00000080U
 #define XRDP_OHOS_FEATURE_DIRECT_INPUT 0x00000100U
+#define XRDP_OHOS_FEATURE_INTERNAL_CAPTURE 0x00000200U
+#define XRDP_OHOS_FEATURE_CAPTURE_DIAGNOSTICS 0x00000400U
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -123,6 +125,41 @@ struct xrdp_ohos_display_geometry
     uint32_t reserved;
 };
 
+struct xrdp_ohos_capture_diagnostics
+{
+    uint32_t size;
+    uint32_t running;
+    uint32_t width;
+    uint32_t height;
+    uint32_t frame_rate;
+    uint32_t show_cursor;
+    uint64_t ready_count;
+    uint64_t submitted_count;
+    uint64_t dropped_count;
+    uint64_t audio_ready_count;
+    uint64_t audio_submitted_count;
+    uint64_t audio_dropped_count;
+    uint64_t audio_bytes;
+    uint64_t capture_error_count;
+    uint32_t video_submitter_running;
+    uint32_t video_submitter_has_pending;
+    uint32_t video_submitter_submitting;
+    uint64_t video_queued_count;
+    uint64_t video_submitted_count;
+    uint64_t video_failed_count;
+    uint64_t video_replaced_count;
+    uint64_t video_precopy_drop_count;
+    uint64_t video_backoff_drop_count;
+    uint64_t video_buffer_allocated_count;
+    uint64_t video_buffer_reused_count;
+    uint64_t video_free_buffer_count;
+    uint64_t encoded_backpressure_count;
+    int32_t video_last_status;
+    uint32_t video_last_copy_us;
+    uint32_t video_last_submit_us;
+    uint32_t reserved;
+};
+
 struct xrdp_ohos_frame
 {
     const void *data;
@@ -210,6 +247,16 @@ xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info);
 XRDP_OHOS_API int
 xrdp_ohos_query_display_geometry(
     struct xrdp_ohos_display_geometry *geometry);
+
+XRDP_OHOS_API int
+xrdp_ohos_capture_get_diagnostics(
+    struct xrdp_ohos_capture_diagnostics *diagnostics);
+
+XRDP_OHOS_API int
+xrdp_ohos_capture_submit_frame(const struct xrdp_ohos_frame *frame);
+
+XRDP_OHOS_API void
+xrdp_ohos_capture_reset(const char *reason);
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_submit_frame(const struct xrdp_ohos_frame *frame);

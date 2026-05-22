@@ -113,16 +113,7 @@ ohos_forward_backend_event(struct ohos_mod *self, int type, int suppress,
     struct ohos_frame_trace trace;
     int has_trace = 0;
 
-    if (self == 0 || ohos_lock_input_state() != 0)
-    {
-        return;
-    }
-
-    callback = g_ohos_event_callback;
-    user_data = g_ohos_event_callback_user;
-    ohos_unlock_input_state();
-
-    if (callback == 0)
+    if (self == 0)
     {
         return;
     }
@@ -153,7 +144,22 @@ ohos_forward_backend_event(struct ohos_mod *self, int type, int suppress,
         }
         event.ack_us = ohos_now_us();
     }
-    callback(&event, user_data);
+
+    ohos_capture_handle_backend_event(&event);
+
+    if (ohos_lock_input_state() != 0)
+    {
+        return;
+    }
+
+    callback = g_ohos_event_callback;
+    user_data = g_ohos_event_callback_user;
+    ohos_unlock_input_state();
+
+    if (callback != 0)
+    {
+        callback(&event, user_data);
+    }
 }
 
 int EXPORT_CC

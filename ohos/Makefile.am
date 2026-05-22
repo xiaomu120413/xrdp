@@ -14,6 +14,7 @@ AM_CPPFLAGS = \
   -DXRDP_SHARE_PATH=\"$(XRDP_RUNTIME_SHARE_PATH)\" \
   -DXRDP_PID_PATH=\"$(XRDP_RUNTIME_PID_PATH)\" \
   -I$(top_builddir) \
+  -I$(top_srcdir) \
   -I$(top_srcdir)/common \
   -I$(top_srcdir)/libxrdp \
   -I$(top_srcdir)/xup \
@@ -25,6 +26,8 @@ module_LTLIBRARIES = \
 libxrdpohos_la_SOURCES = \
   ohos.c \
   ohos_backend_api.c \
+  ohos_audio_capture_bridge.cpp \
+  ohos_audio_capture_bridge.h \
   ohos_cliprdr_bitmap.c \
   ohos_cliprdr_channel.c \
   ohos_cliprdr.c \
@@ -41,11 +44,27 @@ libxrdpohos_la_SOURCES = \
   ohos_cliprdr_protocol.c \
   ohos_cliprdr_rich.c \
   ohos_cliprdr_transfer.c \
+  ohos_capture_common.cpp \
+  ohos_capture_common.h \
+  ohos_capture_controller.cpp \
+  ohos_capture_controller.h \
+  ohos_capture_facade.cpp \
+  ohos_capture_h264.cpp \
+  ohos_capture_h264.h \
+  ohos_capture_h264_encoder.cpp \
+  ohos_capture_h264_encoder.h \
+  ohos_capture_raw.cpp \
+  ohos_capture_raw.h \
+  ohos_capture_types.h \
   ohos_display_geometry.c \
   ohos_events.c \
   ohos_frame.c \
+  ohos_frame_submitter.cpp \
+  ohos_frame_submitter.h \
   ohos_gfx_avc420.c \
   ohos_gfx_avc420.h \
+  ohos_h264_payload.cpp \
+  ohos_h264_payload.h \
   ohos_session.c \
   ohos_input.c \
   ohos_input_auth.c \
