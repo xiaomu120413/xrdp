@@ -536,7 +536,9 @@ tconfig_load_gfx(const char *filename, struct xrdp_tconfig_gfx *config)
     /* Default to just RFX support. in case we can't load anything */
     config->codec.codec_count = 1;
     config->codec.codecs[0] = XTC_RFX;
+    config->h264_encoder = XTC_H264_X264;
     memset(config->x264_param, 0, sizeof(config->x264_param));
+    memset(config->openh264_param, 0, sizeof(config->openh264_param));
 
     if ((fp = fopen(filename, "r")) == NULL)
     {
@@ -616,4 +618,3 @@ tconfig_load_gfx(const char *filename, struct xrdp_tconfig_gfx *config)
 
     return rv;
 }
-

@@ -73,10 +73,27 @@ xrdp_encoder_openh264_create(void)
 {
     struct openh264_global *og;
     struct xrdp_tconfig_gfx gfxconfig;
+    char gfx_config_path[256];
+    int rv;
 
     LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_encoder_openh264_create:");
     og = g_new0(struct openh264_global, 1);
-    tconfig_load_gfx(GFX_CONF, &gfxconfig);
+    if (og == NULL)
+    {
+        return NULL;
+    }
+    g_memset(&gfxconfig, 0, sizeof(gfxconfig));
+    xrdp_make_runtime_path(gfx_config_path, sizeof(gfx_config_path),
+                           "XRDP_CFG_PATH", XRDP_CFG_PATH, "gfx.toml");
+    rv = tconfig_load_gfx(gfx_config_path, &gfxconfig);
+    if (rv != 0)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp_encoder_openh264_create: failed to load GFX config %s rv=%d",
+            gfx_config_path, rv);
+        g_free(og);
+        return NULL;
+    }
     memcpy(&og->openh264_param, &gfxconfig.openh264_param,
            sizeof(struct xrdp_tconfig_gfx_openh264_param) *
            NUM_CONNECTION_TYPES);

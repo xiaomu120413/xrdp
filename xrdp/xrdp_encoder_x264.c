@@ -59,8 +59,26 @@ xrdp_encoder_x264_create(void)
 
     struct x264_global *xg;
     struct xrdp_tconfig_gfx gfxconfig;
+    char gfx_config_path[256];
+    int rv;
+
     xg = g_new0(struct x264_global, 1);
-    tconfig_load_gfx(GFX_CONF, &gfxconfig);
+    if (xg == NULL)
+    {
+        return NULL;
+    }
+    g_memset(&gfxconfig, 0, sizeof(gfxconfig));
+    xrdp_make_runtime_path(gfx_config_path, sizeof(gfx_config_path),
+                           "XRDP_CFG_PATH", XRDP_CFG_PATH, "gfx.toml");
+    rv = tconfig_load_gfx(gfx_config_path, &gfxconfig);
+    if (rv != 0)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp_encoder_x264_create: failed to load GFX config %s rv=%d",
+            gfx_config_path, rv);
+        g_free(xg);
+        return NULL;
+    }
 
     memcpy(&xg->x264_param, &gfxconfig.x264_param,
            sizeof(struct xrdp_tconfig_gfx_x264_param) * NUM_CONNECTION_TYPES);

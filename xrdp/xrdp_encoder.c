@@ -173,7 +173,12 @@ set_h264_encoder_methods(struct xrdp_encoder *self)
     if (encoder_name == NULL)
     {
         struct xrdp_tconfig_gfx gfxconfig;
-        tconfig_load_gfx(GFX_CONF, &gfxconfig);
+        char gfx_config_path[256];
+
+        g_memset(&gfxconfig, 0, sizeof(gfxconfig));
+        xrdp_make_runtime_path(gfx_config_path, sizeof(gfx_config_path),
+                               "XRDP_CFG_PATH", XRDP_CFG_PATH, "gfx.toml");
+        tconfig_load_gfx(gfx_config_path, &gfxconfig);
 
         switch (gfxconfig.h264_encoder)
         {

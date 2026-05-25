@@ -61,11 +61,51 @@ struct ohos_avcodec_global
         openh264_param[NUM_CONNECTION_TYPES];
 };
 
+struct ohos_avcodec_bitrate_decision
+{
+    int requested;
+    int max_requested;
+    int candidate;
+    int range_valid;
+    int range_min;
+    int range_max;
+    int range_rc;
+    int final_bitrate;
+    int clamped;
+};
+
 /*****************************************************************************/
 static int
 ohos_avcodec_should_log(uint64_t count)
 {
     return count <= 8 || (count % 60) == 0;
+}
+
+/*****************************************************************************/
+static const char *
+ohos_avcodec_connection_type_name(int connection_type)
+{
+    switch (connection_type)
+    {
+        case 0:
+            return "default";
+        case CONNECTION_TYPE_MODEM:
+            return "modem";
+        case CONNECTION_TYPE_BROADBAND_LOW:
+            return "broadband_low";
+        case CONNECTION_TYPE_SATELLITE:
+            return "satellite";
+        case CONNECTION_TYPE_BROADBAND_HIGH:
+            return "broadband_high";
+        case CONNECTION_TYPE_WAN:
+            return "wan";
+        case CONNECTION_TYPE_LAN:
+            return "lan";
+        case CONNECTION_TYPE_AUTODETECT:
+            return "autodetect";
+        default:
+            return "unknown";
+    }
 }
 
 /*****************************************************************************/
@@ -434,22 +474,60 @@ ohos_avcodec_select_framerate(OH_AVCapability *capability, int width,
 /*****************************************************************************/
 static int
 ohos_avcodec_select_bitrate(OH_AVCapability *capability, int requested,
-                            int max_requested)
+                            int max_requested,
+                            struct ohos_avcodec_bitrate_decision *decision)
 {
     OH_AVRange range;
+    OH_AVErrCode range_rc;
     int bitrate;
+    int candidate;
+
+    range.minVal = 0;
+    range.maxVal = 0;
+    if (decision != NULL)
+    {
+        g_memset(decision, 0, sizeof(struct ohos_avcodec_bitrate_decision));
+        decision->requested = requested;
+        decision->max_requested = max_requested;
+        decision->range_rc = -1;
+    }
 
     bitrate = requested > 0 ? requested : OHOS_AVCODEC_DEFAULT_BITRATE;
     if (max_requested > 0 && max_requested < bitrate)
     {
         bitrate = max_requested;
     }
+    candidate = bitrate;
 
-    if (capability != NULL &&
-            OH_AVCapability_GetEncoderBitrateRange(
-                capability, &range) == AV_ERR_OK)
+    if (decision != NULL)
     {
-        bitrate = ohos_avcodec_clamp_int(bitrate, range.minVal, range.maxVal);
+        decision->candidate = candidate;
+    }
+
+    if (capability != NULL)
+    {
+        range_rc = OH_AVCapability_GetEncoderBitrateRange(capability, &range);
+        if (decision != NULL)
+        {
+            decision->range_rc = range_rc;
+            decision->range_min = range.minVal;
+            decision->range_max = range.maxVal;
+        }
+        if (range_rc == AV_ERR_OK)
+        {
+            if (decision != NULL)
+            {
+                decision->range_valid = 1;
+            }
+            bitrate = ohos_avcodec_clamp_int(bitrate, range.minVal,
+                                             range.maxVal);
+        }
+    }
+
+    if (decision != NULL)
+    {
+        decision->final_bitrate = bitrate;
+        decision->clamped = bitrate != candidate;
     }
     return bitrate;
 }
@@ -608,6 +686,7 @@ ohos_avcodec_configure_encoder(struct ohos_avcodec_global *og,
     int max_bitrate;
     int ct;
     bool is_valid;
+    struct ohos_avcodec_bitrate_decision bitrate_decision;
 
     ct = connection_type;
     if (ct > CONNECTION_TYPE_LAN || ct < CONNECTION_TYPE_MODEM)
@@ -639,9 +718,40 @@ ohos_avcodec_configure_encoder(struct ohos_avcodec_global *og,
     bitrate = ohos_avcodec_select_bitrate(
                   capability,
                   og->openh264_param[ct].TargetBitrate,
-                  og->openh264_param[ct].MaxBitrate);
+                  og->openh264_param[ct].MaxBitrate,
+                  &bitrate_decision);
     max_bitrate = og->openh264_param[ct].MaxBitrate > 0 ?
                   og->openh264_param[ct].MaxBitrate : bitrate;
+
+    LOG(LOG_LEVEL_INFO,
+        "xrdp_encoder_ohos_avcodec: bitrate decision size=%dx%d connection=%s(%d->%d) configTarget=%d configMax=%d configMaxFps=%.3f selectedFps=%d candidate=%d capabilityRangeValid=%d capabilityRangeRc=%d capabilityMin=%d capabilityMax=%d final=%d maxBitrate=%d clamped=%d",
+        width, height,
+        ohos_avcodec_connection_type_name(connection_type),
+        connection_type, ct,
+        og->openh264_param[ct].TargetBitrate,
+        og->openh264_param[ct].MaxBitrate,
+        og->openh264_param[ct].MaxFrameRate,
+        frame_rate,
+        bitrate_decision.candidate,
+        bitrate_decision.range_valid,
+        bitrate_decision.range_rc,
+        bitrate_decision.range_min,
+        bitrate_decision.range_max,
+        bitrate_decision.final_bitrate,
+        max_bitrate,
+        bitrate_decision.clamped);
+    if (bitrate_decision.clamped &&
+            bitrate_decision.candidate >= 1000000 &&
+            bitrate_decision.final_bitrate < bitrate_decision.candidate / 4)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp_encoder_ohos_avcodec: bitrate was heavily clamped candidate=%d final=%d range=%d..%d; if the range is reported in kbps, the encoder is being configured too low for %dx%d",
+            bitrate_decision.candidate,
+            bitrate_decision.final_bitrate,
+            bitrate_decision.range_min,
+            bitrate_decision.range_max,
+            width, height);
+    }
 
     codec = OH_VideoEncoder_CreateByName(codec_name);
     if (codec == NULL)
@@ -962,6 +1072,9 @@ xrdp_encoder_ohos_avcodec_create(void)
 {
     struct ohos_avcodec_global *og;
     struct xrdp_tconfig_gfx gfxconfig;
+    char gfx_config_path[256];
+    int index;
+    int rv;
 
     LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_encoder_ohos_avcodec_create:");
     og = g_new0(struct ohos_avcodec_global, 1);
@@ -969,10 +1082,32 @@ xrdp_encoder_ohos_avcodec_create(void)
     {
         return NULL;
     }
-    tconfig_load_gfx(GFX_CONF, &gfxconfig);
+    g_memset(&gfxconfig, 0, sizeof(gfxconfig));
+    xrdp_make_runtime_path(gfx_config_path, sizeof(gfx_config_path),
+                           "XRDP_CFG_PATH", XRDP_CFG_PATH, "gfx.toml");
+    rv = tconfig_load_gfx(gfx_config_path, &gfxconfig);
+    if (rv != 0)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp_encoder_ohos_avcodec: failed to load GFX config %s rv=%d",
+            gfx_config_path, rv);
+        g_free(og);
+        return NULL;
+    }
     g_memcpy(&og->openh264_param, &gfxconfig.openh264_param,
              sizeof(struct xrdp_tconfig_gfx_openh264_param) *
              NUM_CONNECTION_TYPES);
+    for (index = 0; index < NUM_CONNECTION_TYPES; ++index)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp_encoder_ohos_avcodec: gfx OpenH264 config connection=%s(%d) frameSkip=%d target=%d max=%d maxFps=%.3f",
+            ohos_avcodec_connection_type_name(index),
+            index,
+            og->openh264_param[index].EnableFrameSkip,
+            og->openh264_param[index].TargetBitrate,
+            og->openh264_param[index].MaxBitrate,
+            og->openh264_param[index].MaxFrameRate);
+    }
     return og;
 }
 
