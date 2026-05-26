@@ -62,9 +62,11 @@ ohos_cliprdr_init(struct ohos_cliprdr *cliprdr, struct mod *mod,
     cliprdr->mod = mod;
     cliprdr->channel_id = -1;
     cliprdr->capability_flags = CB_USE_LONG_FORMAT_NAMES |
-                                 CB_STREAM_FILECLIP_ENABLED;
+                                 CB_STREAM_FILECLIP_ENABLED |
+                                 CB_FILECLIP_NO_FILE_PATHS;
     cliprdr->remote_file_fd = -1;
     cliprdr->wake_obj = wake_obj;
+    cliprdr->instance_id = ohos_cliprdr_next_instance_id();
     cliprdr->lock = tc_mutex_create();
 
     (void)ohos_cliprdr_pasteboard_init(cliprdr);
@@ -99,8 +101,24 @@ ohos_cliprdr_connect(struct ohos_cliprdr *cliprdr)
     }
     cliprdr->connected = 1;
     cliprdr->channel_ready = 0;
+    cliprdr->remote_capability_flags = 0;
+    cliprdr->remote_caps_received = 0;
     cliprdr->requested_format = 0;
     cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    cliprdr->pending_remote_format = 0;
+    cliprdr->pending_remote_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    cliprdr->remote_text_format = 0;
+    cliprdr->remote_html_format = 0;
+    cliprdr->remote_uriw_format = 0;
+    cliprdr->remote_uri_list_format = 0;
+    cliprdr->remote_dib_format = 0;
+    cliprdr->remote_dibv5_format = 0;
+    cliprdr->remote_image_bmp_format = 0;
+    cliprdr->remote_image_png_format = 0;
+    cliprdr->remote_image_jpeg_format = 0;
+    cliprdr->remote_image_webp_format = 0;
+    cliprdr->remote_file_group_descriptor_format = 0;
+    cliprdr->remote_file_contents_format = 0;
     ohos_cliprdr_file_transfer_reset(cliprdr);
     ohos_cliprdr_reset_stats(cliprdr);
 
@@ -131,7 +149,15 @@ ohos_cliprdr_connect(struct ohos_cliprdr *cliprdr)
     rv = ohos_cliprdr_send_capabilities(cliprdr);
     if (rv == 0)
     {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: local caps sent flags=0x%8.8x",
+            cliprdr->capability_flags);
         rv = ohos_cliprdr_send_monitor_ready(cliprdr);
+    }
+    if (rv == 0)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: monitor ready sent");
     }
     if (rv == 0)
     {
@@ -159,9 +185,25 @@ ohos_cliprdr_disconnect(struct ohos_cliprdr *cliprdr)
     }
     cliprdr->connected = 0;
     cliprdr->channel_ready = 0;
+    cliprdr->remote_capability_flags = 0;
+    cliprdr->remote_caps_received = 0;
     cliprdr->channel_id = -1;
     cliprdr->requested_format = 0;
     cliprdr->requested_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    cliprdr->pending_remote_format = 0;
+    cliprdr->pending_remote_kind = OHOS_CLIPRDR_REQUEST_NONE;
+    cliprdr->remote_text_format = 0;
+    cliprdr->remote_html_format = 0;
+    cliprdr->remote_uriw_format = 0;
+    cliprdr->remote_uri_list_format = 0;
+    cliprdr->remote_dib_format = 0;
+    cliprdr->remote_dibv5_format = 0;
+    cliprdr->remote_image_bmp_format = 0;
+    cliprdr->remote_image_png_format = 0;
+    cliprdr->remote_image_jpeg_format = 0;
+    cliprdr->remote_image_webp_format = 0;
+    cliprdr->remote_file_group_descriptor_format = 0;
+    cliprdr->remote_file_contents_format = 0;
     cliprdr->local_change_pending = 0;
     ohos_cliprdr_file_transfer_reset(cliprdr);
     ohos_cliprdr_channel_reset(cliprdr);

@@ -13,6 +13,8 @@ struct ohos_cliprdr_remote_file
     char *name;
     char *path;
     char *uri;
+    int list_index;
+    int image_kind;
     int size;
 };
 
@@ -24,11 +26,17 @@ struct ohos_cliprdr
     int channel_ready;
     int capability_flags;
     int remote_capability_flags;
+    int remote_caps_received;
     int requested_format;
     int requested_kind;
+    int pending_remote_format;
+    int pending_remote_kind;
+    int remote_text_format;
     int remote_html_format;
     int remote_uriw_format;
     int remote_uri_list_format;
+    int remote_dib_format;
+    int remote_dibv5_format;
     int remote_image_bmp_format;
     int remote_image_png_format;
     int remote_image_jpeg_format;
@@ -48,9 +56,12 @@ struct ohos_cliprdr
     int pasteboard_subscribed;
     tbus lock;
     tintptr wake_obj;
+    unsigned int instance_id;
     int local_change_pending;
     unsigned int ignore_local_changes;
     unsigned int ignore_local_changes_until;
+    unsigned int remote_write_generation;
+    unsigned int seen_remote_write_generation;
     unsigned int local_format_lists_sent;
     unsigned int remote_format_lists_received;
     unsigned int local_requests_received;

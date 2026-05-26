@@ -27,6 +27,35 @@ Image_ErrorCode
 OH_DecodingOptions_Release(OH_DecodingOptions *options);
 
 Image_ErrorCode
+OH_PixelmapInitializationOptions_Create(
+    OH_Pixelmap_InitializationOptions **options);
+
+Image_ErrorCode
+OH_PixelmapInitializationOptions_SetWidth(
+    OH_Pixelmap_InitializationOptions *options, uint32_t width);
+
+Image_ErrorCode
+OH_PixelmapInitializationOptions_SetHeight(
+    OH_Pixelmap_InitializationOptions *options, uint32_t height);
+
+Image_ErrorCode
+OH_PixelmapInitializationOptions_SetPixelFormat(
+    OH_Pixelmap_InitializationOptions *options, int32_t pixel_format);
+
+Image_ErrorCode
+OH_PixelmapInitializationOptions_SetAlphaType(
+    OH_Pixelmap_InitializationOptions *options, int32_t alpha_type);
+
+Image_ErrorCode
+OH_PixelmapInitializationOptions_Release(
+    OH_Pixelmap_InitializationOptions *options);
+
+Image_ErrorCode
+OH_PixelmapNative_CreatePixelmap(uint8_t *data, size_t data_size,
+                                 OH_Pixelmap_InitializationOptions *options,
+                                 OH_PixelmapNative **pixelmap);
+
+Image_ErrorCode
 OH_ImageSourceNative_CreateFromUri(char *uri, size_t uri_size,
                                    OH_ImageSourceNative **source);
 
@@ -82,6 +111,66 @@ ohos_cliprdr_source_to_pixelmap(OH_ImageSourceNative *source,
     if (options != 0)
     {
         OH_DecodingOptions_Release(options);
+    }
+    if (rc != IMAGE_SUCCESS || *pixelmap == 0)
+    {
+        if (*pixelmap != 0)
+        {
+            OH_PixelmapNative_Release(*pixelmap);
+            *pixelmap = 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+int
+ohos_cliprdr_create_pixelmap_from_bgra(const char *bgra, unsigned int width,
+                                       unsigned int height,
+                                       OH_PixelmapNative **pixelmap)
+{
+    Image_ErrorCode rc;
+    OH_Pixelmap_InitializationOptions *options = 0;
+    size_t data_size;
+
+    if (bgra == 0 || width == 0 || height == 0 || pixelmap == 0 ||
+            width > 8192 || height > 8192)
+    {
+        return 1;
+    }
+    data_size = (size_t)width * (size_t)height * 4U;
+    if (data_size > OHOS_CLIPRDR_MAX_IMAGE_BYTES)
+    {
+        return 1;
+    }
+    *pixelmap = 0;
+    rc = OH_PixelmapInitializationOptions_Create(&options);
+    if (rc == IMAGE_SUCCESS)
+    {
+        rc = OH_PixelmapInitializationOptions_SetWidth(options, width);
+    }
+    if (rc == IMAGE_SUCCESS)
+    {
+        rc = OH_PixelmapInitializationOptions_SetHeight(options, height);
+    }
+    if (rc == IMAGE_SUCCESS)
+    {
+        rc = OH_PixelmapInitializationOptions_SetPixelFormat(
+            options, PIXEL_FORMAT_BGRA_8888);
+    }
+    if (rc == IMAGE_SUCCESS)
+    {
+        rc = OH_PixelmapInitializationOptions_SetAlphaType(
+            options, PIXELMAP_ALPHA_TYPE_UNPREMULTIPLIED);
+    }
+    if (rc == IMAGE_SUCCESS)
+    {
+        rc = OH_PixelmapNative_CreatePixelmap((uint8_t *)bgra, data_size,
+                                              options, pixelmap);
+    }
+    if (options != 0)
+    {
+        OH_PixelmapInitializationOptions_Release(options);
     }
     if (rc != IMAGE_SUCCESS || *pixelmap == 0)
     {

@@ -13,10 +13,7 @@
 #include "os_calls.h"
 #include "string_calls.h"
 
-#include <time.h>
-
 #define OHOS_CLIPRDR_FILEDESCRIPTORW_BYTES 592
-#define OHOS_CLIPRDR_WINDOWS_EPOCH_DIFF 11644473600LL
 
 struct ohos_cliprdr_local_file
 {
@@ -166,7 +163,7 @@ ohos_cliprdr_has_local_file(struct ohos_cliprdr *cliprdr)
     int rv;
 
     rv = ohos_cliprdr_get_local_file(cliprdr, &file);
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(rv == 0 ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: local file probe ok=%d uri=%s path=%s size=%d",
         rv == 0, rv == 0 ? file.uri : "", rv == 0 ? file.path : "",
         rv == 0 ? file.size : 0);
@@ -178,20 +175,12 @@ static void
 ohos_cliprdr_out_filedescriptorw(struct stream *s,
                                  struct ohos_cliprdr_local_file *file)
 {
-    tui64 win_time;
-    tui32 low;
-    tui32 high;
     const char *name;
     unsigned int utf8_count;
     unsigned int utf16_count;
     int flags;
 
-    flags = CB_FD_ATTRIBUTES | CB_FD_FILESIZE | CB_FD_WRITESTIME |
-            CB_FD_PROGRESSUI;
-    win_time = ((tui64)time(NULL) + OHOS_CLIPRDR_WINDOWS_EPOCH_DIFF) *
-               10000000LL;
-    low = (tui32)(win_time & 0xffffffff);
-    high = (tui32)(win_time >> 32);
+    flags = CB_FD_ATTRIBUTES | CB_FD_FILESIZE;
     name = file->name;
     utf8_count = g_strlen(name) + 1;
     utf16_count = utf8_as_utf16_word_count(name, utf8_count);
@@ -204,10 +193,8 @@ ohos_cliprdr_out_filedescriptorw(struct stream *s,
 
     out_uint32_le(s, flags);
     out_uint8s(s, 32);
-    out_uint32_le(s, CB_FILE_ATTRIBUTE_ARCHIVE);
-    out_uint8s(s, 16);
-    out_uint32_le(s, low);
-    out_uint32_le(s, high);
+    out_uint32_le(s, CB_FILE_ATTRIBUTE_NORMAL);
+    out_uint8s(s, 24);
     out_uint32_le(s, 0);
     out_uint32_le(s, file->size);
     out_utf8_as_utf16_le(s, name, utf8_count);
@@ -243,9 +230,10 @@ ohos_cliprdr_send_local_file_descriptor(struct ohos_cliprdr *cliprdr)
     s_mark_end(s);
     rv = ohos_cliprdr_send_format_data_response(cliprdr, s->data,
                                                 (int)(s->end - s->data));
-    LOG(LOG_LEVEL_DEBUG,
-        "xrdp.ohos.cliprdr: sent local FileGroupDescriptorW name=%s size=%d rv=%d",
-        file.name, file.size, rv);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: sent local FileGroupDescriptorW name=%s size=%d bytes=%d flags=0x%08x attrs=0x%08x rv=%d",
+        file.name, file.size, (int)(s->end - s->data),
+        CB_FD_ATTRIBUTES | CB_FD_FILESIZE, CB_FILE_ATTRIBUTE_NORMAL, rv);
     free_stream(s);
     ohos_cliprdr_free_local_file(&file);
     return rv;
@@ -273,6 +261,9 @@ ohos_cliprdr_send_filecontents_fail(struct ohos_cliprdr *cliprdr,
     out_uint32_le(s, stream_id);
     s_mark_end(s);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
+    LOG(LOG_LEVEL_WARNING,
+        "xrdp.ohos.cliprdr: sent local filecontents failure stream=%d rv=%d",
+        stream_id, rv);
     free_stream(s);
     return rv;
 }
@@ -308,7 +299,7 @@ ohos_cliprdr_send_local_file_size(struct ohos_cliprdr *cliprdr,
     out_uint32_le(s, 0);
     s_mark_end(s);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.cliprdr: sent local file size stream=%d lindex=%d size=%d rv=%d",
         stream_id, lindex, file.size, rv);
     free_stream(s);
@@ -383,7 +374,7 @@ ohos_cliprdr_send_local_file_range(struct ohos_cliprdr *cliprdr,
     s->p += bytes;
     s_mark_end(s);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.cliprdr: sent local file range stream=%d lindex=%d pos=%d requested=%d bytes=%d name=%s rv=%d",
         stream_id, lindex, position, requested, bytes, file.name, rv);
     free_stream(s);
@@ -402,10 +393,11 @@ ohos_cliprdr_process_local_filecontents_request(struct ohos_cliprdr *cliprdr,
     int position_low;
     int position_high;
     int requested;
-    int clip_data_id;
+    int clip_data_id = 0;
+    int have_clip_data_id = 0;
 
-    if (data_len < 28 ||
-            !s_check_rem_and_log(s, 28, "OHOS cliprdr file request"))
+    if (data_len < 24 ||
+            !s_check_rem_and_log(s, 24, "OHOS cliprdr file request"))
     {
         return 1;
     }
@@ -415,12 +407,18 @@ ohos_cliprdr_process_local_filecontents_request(struct ohos_cliprdr *cliprdr,
     in_uint32_le(s, position_low);
     in_uint32_le(s, position_high);
     in_uint32_le(s, requested);
-    in_uint32_le(s, clip_data_id);
-    LOG(LOG_LEVEL_DEBUG,
-        "xrdp.ohos.cliprdr: local filecontents request stream=%d lindex=%d flags=0x%08x pos=%d/%d requested=%d clipDataId=%d",
+    if (s_check_rem(s, 4))
+    {
+        in_uint32_le(s, clip_data_id);
+        have_clip_data_id = 1;
+    }
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: local filecontents request stream=%d lindex=%d flags=0x%08x pos=%d/%d requested=%d haveClipDataId=%d clipDataId=%d",
         stream_id, lindex, flags, position_high, position_low, requested,
-        clip_data_id);
-    if (position_high != 0)
+        have_clip_data_id, clip_data_id);
+    if (lindex != 0 || position_high != 0 ||
+            (((flags & CB_FILECONTENTS_SIZE) != 0) ==
+             ((flags & CB_FILECONTENTS_RANGE) != 0)))
     {
         return ohos_cliprdr_send_filecontents_fail(cliprdr, stream_id);
     }

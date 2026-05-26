@@ -77,6 +77,14 @@ ohos_cliprdr_write_remote_file_uris(struct ohos_cliprdr *cliprdr)
         rc = ERR_INNER_ERROR;
         goto done;
     }
+    rc = ohos_cliprdr_udmf_make_cross_app(data);
+    if (rc != UDMF_E_OK)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp.ohos.cliprdr: UDMF file cross-app share setup failed rc=%d",
+            rc);
+        goto done;
+    }
     for (index = 0; index < cliprdr->remote_file_count; index++)
     {
         const char *uri = cliprdr->remote_files[index].uri;

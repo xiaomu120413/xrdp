@@ -26,6 +26,9 @@ static const char g_image_webp_format_name[] = "image/webp";
 static const char g_file_group_descriptor_format_name[] =
     "FileGroupDescriptorW";
 static const char g_file_contents_format_name[] = "FileContents";
+static const char g_drop_effect_format_name[] = "DropEffect";
+static const char g_preferred_drop_effect_format_name[] =
+    "Preferred DropEffect";
 
 int
 OH_FileUri_GetPathFromUri(const char *uri, unsigned int length, char **result);
@@ -107,6 +110,10 @@ ohos_cliprdr_format_name(int format_id)
             return g_file_group_descriptor_format_name;
         case OHOS_CLIPRDR_FORMAT_FILE_CONTENTS:
             return g_file_contents_format_name;
+        case OHOS_CLIPRDR_FORMAT_DROP_EFFECT:
+            return g_drop_effect_format_name;
+        case OHOS_CLIPRDR_FORMAT_PREFERRED_DROP_EFFECT:
+            return g_preferred_drop_effect_format_name;
         default:
             return 0;
     }

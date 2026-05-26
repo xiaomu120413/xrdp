@@ -104,6 +104,19 @@ ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
     struct stream *s;
     int rv;
 
+    if (cliprdr->requested_kind != OHOS_CLIPRDR_REQUEST_NONE)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "xrdp.ohos.cliprdr: refused overlapping remote data request format=%d(%s) kind=%s(%d) in-flight=%d(%s) kind=%s(%d)",
+            format_id, ohos_cliprdr_format_display_name(format_id),
+            ohos_cliprdr_request_kind_name(request_kind), request_kind,
+            cliprdr->requested_format,
+            ohos_cliprdr_format_display_name(cliprdr->requested_format),
+            ohos_cliprdr_request_kind_name(cliprdr->requested_kind),
+            cliprdr->requested_kind);
+        return 0;
+    }
+
     make_stream(s);
     if (s == 0)
     {
@@ -121,7 +134,7 @@ ohos_cliprdr_send_format_data_request(struct ohos_cliprdr *cliprdr,
 
     cliprdr->requested_format = format_id;
     cliprdr->requested_kind = request_kind;
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.cliprdr: requesting remote clipboard data format=%d(%s) kind=%s(%d)",
         format_id, ohos_cliprdr_format_display_name(format_id),
         ohos_cliprdr_request_kind_name(request_kind), request_kind);
@@ -191,6 +204,7 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     int has_uri;
     int has_image;
     int has_file;
+    int has_image_file;
     int image_format = 0;
     int rv;
 
@@ -204,6 +218,24 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     has_uri = (ohos_cliprdr_pasteboard_read_uri(cliprdr, &uri) == 0);
     has_image = ohos_cliprdr_has_local_image(cliprdr, &image_format);
     has_file = ohos_cliprdr_has_local_file(cliprdr);
+    has_image_file = has_image && has_file;
+    if (cliprdr->remote_caps_received && has_file &&
+            (cliprdr->remote_capability_flags & CB_STREAM_FILECLIP_ENABLED) == 0)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: suppress local file format because remote file clip is unsupported flags=0x%8.8x",
+            cliprdr->remote_capability_flags);
+        has_file = 0;
+        has_image_file = 0;
+    }
+    if (has_image && has_uri)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: suppress local uri format for image clipboard uri=%d file=%d image-format=%d(%s)",
+            has_uri, has_file, image_format,
+            ohos_cliprdr_format_display_name(image_format));
+        has_uri = 0;
+    }
     if (!has_text && !has_html && !has_uri && !has_image && !has_file &&
             !allow_empty)
     {
@@ -245,22 +277,30 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
         ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_URI_LIST,
                                 ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_URI_LIST));
     }
-    if (has_image)
-    {
-        ohos_cliprdr_out_format(s, CF_DIB, 0);
-        if (image_format != 0)
-        {
-            ohos_cliprdr_out_format(s, image_format,
-                                    ohos_cliprdr_format_name(image_format));
-        }
-    }
     if (has_file)
     {
         ohos_cliprdr_out_format(s,
                                 OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR,
                                 ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR));
-        ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_FILE_CONTENTS,
-                                ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_FILE_CONTENTS));
+        if (!has_image_file)
+        {
+            ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_FILE_CONTENTS,
+                                    ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_FILE_CONTENTS));
+            ohos_cliprdr_out_format(s, OHOS_CLIPRDR_FORMAT_DROP_EFFECT,
+                                    ohos_cliprdr_format_name(OHOS_CLIPRDR_FORMAT_DROP_EFFECT));
+        }
+    }
+    if (has_image)
+    {
+        if (!has_image_file)
+        {
+            ohos_cliprdr_out_format(s, CF_DIB, 0);
+        }
+        if (image_format != 0)
+        {
+            ohos_cliprdr_out_format(s, image_format,
+                                    ohos_cliprdr_format_name(image_format));
+        }
     }
     s_mark_end(s);
 
@@ -268,11 +308,11 @@ ohos_cliprdr_send_local_format_list(struct ohos_cliprdr *cliprdr,
     if (rv == 0)
     {
         cliprdr->local_format_lists_sent++;
-        LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.cliprdr: sent local formats text=%d html=%d uri=%d image=%d image-format=%d(%s) file=%d reason=%s",
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: sent local formats text=%d html=%d uri=%d image=%d image-format=%d(%s) file=%d image-file=%d reason=%s",
             has_text, has_html, has_uri, has_image, image_format,
             ohos_cliprdr_format_display_name(image_format),
-            has_file, reason == 0 ? "" : reason);
+            has_file, has_image_file, reason == 0 ? "" : reason);
     }
     else
     {

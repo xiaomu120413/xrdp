@@ -232,6 +232,10 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     int source_bytes = bytes;
     char *source_data = (char *)data;
     char *owned_source = 0;
+    char *cache_data = 0;
+    int cache_bytes = 0;
+    int cache_format = 0;
+    char *bgra = 0;
     char *file_uri = 0;
     OH_PixelmapNative *pixelmap = 0;
     OH_UdsPixelMap *pixelmap_data = 0;
@@ -245,34 +249,73 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     {
         return 1;
     }
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.cliprdr: remote image write start kind=%s(%d) bytes=%d",
         ohos_cliprdr_request_kind_name(request_kind), request_kind, bytes);
     if (request_kind == OHOS_CLIPRDR_REQUEST_DIB)
     {
-        owned_source = ohos_cliprdr_dib_to_bmp(data, bytes, &source_bytes);
-        source_data = owned_source;
-        source_format = OHOS_CLIPRDR_FORMAT_IMAGE_BMP;
+        source_format = CF_DIB;
+        source_data = (char *)data;
+        source_bytes = bytes;
+        if (ohos_cliprdr_dib_to_bgra(data, bytes, &bgra, &width,
+                                     &height) == 0 &&
+                ohos_cliprdr_create_pixelmap_from_bgra(bgra, width, height,
+                                                       &pixelmap) == 0)
+        {
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.cliprdr: remote DIB parsed to PixelMap %ux%u bytes=%d",
+                width, height, bytes);
+            owned_source = ohos_cliprdr_dib_to_bmp(data, bytes, &cache_bytes);
+            if (owned_source != 0)
+            {
+                cache_data = owned_source;
+                cache_format = OHOS_CLIPRDR_FORMAT_IMAGE_BMP;
+            }
+        }
+        g_free(bgra);
+        bgra = 0;
     }
     else
     {
         source_format = ohos_cliprdr_image_format_from_signature(data, bytes);
+        cache_data = source_data;
+        cache_bytes = source_bytes;
+        cache_format = source_format;
     }
-    if (source_data == 0 || source_format == 0 ||
-            ohos_cliprdr_decode_image_data_to_pixelmap(source_data,
-                                                       source_bytes,
-                                                       &pixelmap, &width,
-                                                       &height) != 0)
+    if (pixelmap == 0)
     {
-        LOG(LOG_LEVEL_DEBUG,
+        if (request_kind == OHOS_CLIPRDR_REQUEST_DIB)
+        {
+            owned_source = ohos_cliprdr_dib_to_bmp(data, bytes, &source_bytes);
+            source_data = owned_source;
+            source_format = OHOS_CLIPRDR_FORMAT_IMAGE_BMP;
+            cache_data = owned_source;
+            cache_bytes = source_bytes;
+            cache_format = source_format;
+        }
+        if (source_data != 0 && source_format != 0)
+        {
+            (void)ohos_cliprdr_decode_image_data_to_pixelmap(source_data,
+                                                             source_bytes,
+                                                             &pixelmap,
+                                                             &width,
+                                                             &height);
+        }
+    }
+    if (pixelmap == 0)
+    {
+        LOG(LOG_LEVEL_WARNING,
             "xrdp.ohos.cliprdr: remote image write decode failed kind=%s source-format=%d(%s) source-bytes=%d",
             ohos_cliprdr_request_kind_name(request_kind), source_format,
             ohos_cliprdr_format_display_name(source_format), source_bytes);
         g_free(owned_source);
         return 1;
     }
-    file_uri = ohos_cliprdr_cache_remote_image(source_format, source_data,
-                                               source_bytes);
+    if (cache_data != 0 && cache_format != 0 && cache_bytes > 0)
+    {
+        file_uri = ohos_cliprdr_cache_remote_image(cache_format, cache_data,
+                                                   cache_bytes);
+    }
     pixelmap_data = OH_UdsPixelMap_Create();
     file_uri_data = file_uri == 0 ? 0 : OH_UdsFileUri_Create();
     record = OH_UdmfRecord_Create();
@@ -280,6 +323,14 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     if (pixelmap_data == 0 || record == 0 || udmf == 0 ||
             (file_uri != 0 && file_uri_data == 0))
     {
+        goto fail;
+    }
+    rc = ohos_cliprdr_udmf_make_cross_app(udmf);
+    if (rc != UDMF_E_OK)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp.ohos.cliprdr: UDMF image cross-app share setup failed rc=%d",
+            rc);
         goto fail;
     }
     rc = OH_UdsPixelMap_SetPixelMap(pixelmap_data, pixelmap);
@@ -305,7 +356,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     }
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, udmf);
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.cliprdr: Pasteboard SetData image kind=%s source=%d(%s) record=pixelmap%s %ux%u bytes=%d uri=%s status=%d(%s)",
         ohos_cliprdr_request_kind_name(request_kind), source_format,
         ohos_cliprdr_format_display_name(source_format),

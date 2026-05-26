@@ -20,8 +20,10 @@ typedef struct OH_UdmfData OH_UdmfData;
 #define OHOS_CLIPRDR_FORMAT_IMAGE_PNG 0xC005
 #define OHOS_CLIPRDR_FORMAT_IMAGE_JPEG 0xC006
 #define OHOS_CLIPRDR_FORMAT_IMAGE_WEBP 0xC007
-#define OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR 0xC008
-#define OHOS_CLIPRDR_FORMAT_FILE_CONTENTS 0xC009
+#define OHOS_CLIPRDR_FORMAT_FILE_CONTENTS 0xC0BA
+#define OHOS_CLIPRDR_FORMAT_DROP_EFFECT 0xC0C1
+#define OHOS_CLIPRDR_FORMAT_PREFERRED_DROP_EFFECT 0xC0C2
+#define OHOS_CLIPRDR_FORMAT_FILE_GROUP_DESCRIPTOR 0xC0BC
 #define OHOS_CLIPRDR_MAX_FILE_CHUNK_BYTES (1024 * 1024)
 
 #ifndef CF_DIBV5
@@ -48,6 +50,9 @@ ohos_cliprdr_lock(struct ohos_cliprdr *cliprdr);
 
 int
 ohos_cliprdr_unlock(struct ohos_cliprdr *cliprdr);
+
+unsigned int
+ohos_cliprdr_next_instance_id(void);
 
 int
 ohos_cliprdr_pasteboard_init(struct ohos_cliprdr *cliprdr);
@@ -82,6 +87,9 @@ ohos_cliprdr_pasteboard_write_uri(struct ohos_cliprdr *cliprdr,
 OH_UdmfData *
 ohos_cliprdr_pasteboard_get_data(struct ohos_cliprdr *cliprdr,
                                  const char *reason, int *status);
+
+int
+ohos_cliprdr_udmf_make_cross_app(OH_UdmfData *data);
 
 void
 ohos_cliprdr_pasteboard_begin_remote_write(struct ohos_cliprdr *cliprdr);
@@ -157,10 +165,19 @@ char *
 ohos_cliprdr_dib_to_bmp(const char *dib, int dib_bytes, int *out_bytes);
 
 int
+ohos_cliprdr_dib_to_bgra(const char *dib, int dib_bytes, char **bgra,
+                         unsigned int *width, unsigned int *height);
+
+int
 ohos_cliprdr_decode_image_data_to_pixelmap(const char *data, int bytes,
                                            OH_PixelmapNative **pixelmap,
                                            unsigned int *width,
                                            unsigned int *height);
+
+int
+ohos_cliprdr_create_pixelmap_from_bgra(const char *bgra, unsigned int width,
+                                       unsigned int height,
+                                       OH_PixelmapNative **pixelmap);
 
 int
 ohos_cliprdr_decode_image_data_to_bgra(const char *data, int bytes,

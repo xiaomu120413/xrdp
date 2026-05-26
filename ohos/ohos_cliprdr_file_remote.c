@@ -87,6 +87,44 @@ ohos_cliprdr_remote_safe_name(const char *name)
     return safe;
 }
 
+static int
+ohos_cliprdr_remote_image_kind_from_name(const char *name)
+{
+    const char *dot;
+
+    if (name == 0)
+    {
+        return OHOS_CLIPRDR_REQUEST_NONE;
+    }
+    dot = name + g_strlen(name);
+    while (dot > name && dot[-1] != '.')
+    {
+        dot--;
+    }
+    if (dot <= name)
+    {
+        return OHOS_CLIPRDR_REQUEST_NONE;
+    }
+    if (ohos_cliprdr_strcasecmp(dot, "png") == 0)
+    {
+        return OHOS_CLIPRDR_REQUEST_IMAGE_PNG;
+    }
+    if (ohos_cliprdr_strcasecmp(dot, "jpg") == 0 ||
+            ohos_cliprdr_strcasecmp(dot, "jpeg") == 0)
+    {
+        return OHOS_CLIPRDR_REQUEST_IMAGE_JPEG;
+    }
+    if (ohos_cliprdr_strcasecmp(dot, "webp") == 0)
+    {
+        return OHOS_CLIPRDR_REQUEST_IMAGE_WEBP;
+    }
+    if (ohos_cliprdr_strcasecmp(dot, "bmp") == 0)
+    {
+        return OHOS_CLIPRDR_REQUEST_IMAGE_BMP;
+    }
+    return OHOS_CLIPRDR_REQUEST_NONE;
+}
+
 static char *
 ohos_cliprdr_make_cache_path(const char *name, int index)
 {
@@ -128,6 +166,78 @@ ohos_cliprdr_path_to_file_uri(const char *path)
         g_sprintf(uri, "file://%s", path);
     }
     return uri;
+}
+
+static int
+ohos_cliprdr_read_remote_cached_file(const char *path, char **data,
+                                     int *bytes)
+{
+    int fd;
+    int size;
+    int read_bytes;
+
+    if (data == 0 || bytes == 0)
+    {
+        return 1;
+    }
+    *data = 0;
+    *bytes = 0;
+    size = g_file_get_size(path);
+    if (size <= 0 || size > OHOS_CLIPRDR_MAX_IMAGE_BYTES)
+    {
+        return 1;
+    }
+    fd = g_file_open_ro(path);
+    if (fd < 0)
+    {
+        return 1;
+    }
+    *data = (char *)g_malloc(size, 0);
+    if (*data == 0)
+    {
+        g_file_close(fd);
+        return 1;
+    }
+    read_bytes = g_file_read(fd, *data, size);
+    g_file_close(fd);
+    if (read_bytes != size)
+    {
+        g_free(*data);
+        *data = 0;
+        return 1;
+    }
+    *bytes = size;
+    return 0;
+}
+
+static int
+ohos_cliprdr_write_single_remote_image_file(struct ohos_cliprdr *cliprdr)
+{
+    struct ohos_cliprdr_remote_file *file;
+    char *data = 0;
+    int bytes = 0;
+    int rv;
+
+    if (cliprdr->remote_file_count != 1)
+    {
+        return 1;
+    }
+    file = cliprdr->remote_files;
+    if (file->image_kind == OHOS_CLIPRDR_REQUEST_NONE ||
+            file->path == 0 ||
+            ohos_cliprdr_read_remote_cached_file(file->path, &data,
+                                                 &bytes) != 0)
+    {
+        return 1;
+    }
+    rv = ohos_cliprdr_write_remote_image(cliprdr, file->image_kind,
+                                         data, bytes);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: remote image file paste name=%s bytes=%d kind=%s rv=%d",
+        file->name == 0 ? "" : file->name, bytes,
+        ohos_cliprdr_request_kind_name(file->image_kind), rv);
+    g_free(data);
+    return rv;
 }
 
 void
@@ -194,7 +304,8 @@ ohos_cliprdr_send_remote_filecontents_request(struct ohos_cliprdr *cliprdr,
     }
     ohos_cliprdr_out_header(s, CB_FILECONTENTS_REQUEST, 0);
     out_uint32_le(s, stream_id);
-    out_uint32_le(s, cliprdr->remote_file_index);
+    out_uint32_le(s,
+                  cliprdr->remote_files[cliprdr->remote_file_index].list_index);
     out_uint32_le(s, flags);
     out_uint32_le(s, position);
     out_uint32_le(s, 0);
@@ -208,13 +319,17 @@ ohos_cliprdr_send_remote_filecontents_request(struct ohos_cliprdr *cliprdr,
         OHOS_CLIPRDR_REMOTE_FILE_SIZE : OHOS_CLIPRDR_REMOTE_FILE_RANGE;
     LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: requested remote filecontents stream=%d lindex=%d flags=0x%08x pos=%d requested=%d rv=%d",
-        stream_id, cliprdr->remote_file_index, flags, position, requested,
-        rv);
+        stream_id,
+        cliprdr->remote_files[cliprdr->remote_file_index].list_index,
+        flags, position, requested, rv);
     return rv;
 }
 
 static int
 ohos_cliprdr_request_next_remote_file(struct ohos_cliprdr *cliprdr);
+
+static int
+ohos_cliprdr_open_remote_file(struct ohos_cliprdr *cliprdr, int size);
 
 static int
 ohos_cliprdr_complete_remote_file(struct ohos_cliprdr *cliprdr)
@@ -238,7 +353,15 @@ ohos_cliprdr_complete_remote_file(struct ohos_cliprdr *cliprdr)
     {
         return ohos_cliprdr_request_next_remote_file(cliprdr);
     }
-    rv = ohos_cliprdr_write_remote_file_uris(cliprdr);
+    if (cliprdr->remote_file_count == 1 &&
+            cliprdr->remote_files[0].image_kind != OHOS_CLIPRDR_REQUEST_NONE)
+    {
+        rv = ohos_cliprdr_write_single_remote_image_file(cliprdr);
+    }
+    else
+    {
+        rv = ohos_cliprdr_write_remote_file_uris(cliprdr);
+    }
     if (rv == 0)
     {
         cliprdr->remote_responses_received++;
@@ -255,11 +378,16 @@ ohos_cliprdr_request_next_remote_file(struct ohos_cliprdr *cliprdr)
     cliprdr->remote_file_offset = 0;
     file = cliprdr->remote_files + cliprdr->remote_file_index;
     LOG(LOG_LEVEL_DEBUG,
-        "xrdp.ohos.cliprdr: start remote file index=%d/%d name=%s descriptor-size=%d",
+        "xrdp.ohos.cliprdr: start remote file index=%d/%d list-index=%d name=%s descriptor-size=%d image-kind=%s",
         cliprdr->remote_file_index, cliprdr->remote_file_count,
-        file->name == 0 ? "" : file->name, file->size);
+        file->list_index, file->name == 0 ? "" : file->name, file->size,
+        ohos_cliprdr_request_kind_name(file->image_kind));
+    if (file->size >= 0)
+    {
+        return ohos_cliprdr_open_remote_file(cliprdr, file->size);
+    }
     return ohos_cliprdr_send_remote_filecontents_request(
-               cliprdr, CB_FILECONTENTS_SIZE, 0, 0);
+               cliprdr, CB_FILECONTENTS_SIZE, 0, 8);
 }
 
 static int
@@ -367,11 +495,17 @@ ohos_cliprdr_process_remote_file_descriptor(struct ohos_cliprdr *cliprdr,
         }
         cliprdr->remote_files[index].name =
             ohos_cliprdr_remote_safe_name(name);
+        cliprdr->remote_files[index].list_index = index;
+        cliprdr->remote_files[index].image_kind =
+            ohos_cliprdr_remote_image_kind_from_name(
+                cliprdr->remote_files[index].name);
         cliprdr->remote_files[index].size = size_high == 0 ? size_low : -1;
-        LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.cliprdr: remote file descriptor index=%d name=%s size=%d size-high=%d",
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.cliprdr: remote file descriptor index=%d name=%s size=%d size-high=%d image-kind=%s",
             index, cliprdr->remote_files[index].name == 0 ? "" :
-            cliprdr->remote_files[index].name, size_low, size_high);
+            cliprdr->remote_files[index].name, size_low, size_high,
+            ohos_cliprdr_request_kind_name(
+                cliprdr->remote_files[index].image_kind));
     }
     return ohos_cliprdr_request_next_remote_file(cliprdr);
 }

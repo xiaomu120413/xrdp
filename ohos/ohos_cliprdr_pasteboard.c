@@ -11,12 +11,157 @@
 #include "log.h"
 #include "os_calls.h"
 #include "string_calls.h"
+#include "thread_calls.h"
 
 #include <database/pasteboard/oh_pasteboard.h>
 #include <database/pasteboard/oh_pasteboard_err_code.h>
 #include <database/udmf/udmf.h>
 #include <database/udmf/udmf_err_code.h>
 #include <database/udmf/uds.h>
+
+static tbus g_cliprdr_origin_lock = 0;
+static unsigned int g_cliprdr_next_instance_id = 0;
+static unsigned int g_cliprdr_remote_write_generation = 0;
+static unsigned int g_cliprdr_remote_write_owner = 0;
+static unsigned int g_cliprdr_remote_write_until = 0;
+
+static int
+ohos_cliprdr_lock_origin_state(void)
+{
+    if (g_cliprdr_origin_lock == 0)
+    {
+        g_cliprdr_origin_lock = tc_mutex_create();
+    }
+    if (g_cliprdr_origin_lock == 0)
+    {
+        return 1;
+    }
+    return tc_mutex_lock(g_cliprdr_origin_lock);
+}
+
+static void
+ohos_cliprdr_unlock_origin_state(void)
+{
+    if (g_cliprdr_origin_lock != 0)
+    {
+        (void)tc_mutex_unlock(g_cliprdr_origin_lock);
+    }
+}
+
+unsigned int
+ohos_cliprdr_next_instance_id(void)
+{
+    unsigned int id;
+
+    if (ohos_cliprdr_lock_origin_state() != 0)
+    {
+        return 1;
+    }
+    g_cliprdr_next_instance_id++;
+    if (g_cliprdr_next_instance_id == 0)
+    {
+        g_cliprdr_next_instance_id++;
+    }
+    id = g_cliprdr_next_instance_id;
+    ohos_cliprdr_unlock_origin_state();
+    return id;
+}
+
+static void
+ohos_cliprdr_mark_remote_write_origin_locked(struct ohos_cliprdr *cliprdr,
+                                             unsigned int now)
+{
+    if (cliprdr == 0 || ohos_cliprdr_lock_origin_state() != 0)
+    {
+        return;
+    }
+
+    g_cliprdr_remote_write_generation++;
+    if (g_cliprdr_remote_write_generation == 0)
+    {
+        g_cliprdr_remote_write_generation++;
+    }
+    g_cliprdr_remote_write_owner = cliprdr->instance_id;
+    g_cliprdr_remote_write_until = now + OHOS_CLIPRDR_ECHO_SUPPRESS_MS;
+    cliprdr->remote_write_generation = g_cliprdr_remote_write_generation;
+    cliprdr->seen_remote_write_generation =
+        g_cliprdr_remote_write_generation;
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: remote write origin generation=%u owner=%u until=%u",
+        g_cliprdr_remote_write_generation, g_cliprdr_remote_write_owner,
+        g_cliprdr_remote_write_until);
+    ohos_cliprdr_unlock_origin_state();
+}
+
+static void
+ohos_cliprdr_cancel_remote_write_origin_locked(struct ohos_cliprdr *cliprdr)
+{
+    if (cliprdr == 0 || ohos_cliprdr_lock_origin_state() != 0)
+    {
+        return;
+    }
+
+    if (g_cliprdr_remote_write_generation == cliprdr->remote_write_generation &&
+            g_cliprdr_remote_write_owner == cliprdr->instance_id)
+    {
+        LOG(LOG_LEVEL_DEBUG,
+            "xrdp.ohos.cliprdr: cancel remote write origin generation=%u owner=%u",
+            g_cliprdr_remote_write_generation,
+            g_cliprdr_remote_write_owner);
+        g_cliprdr_remote_write_owner = 0;
+        g_cliprdr_remote_write_until = 0;
+    }
+    cliprdr->remote_write_generation = 0;
+    ohos_cliprdr_unlock_origin_state();
+}
+
+static int
+ohos_cliprdr_should_suppress_remote_origin_locked(
+    struct ohos_cliprdr *cliprdr, unsigned int now,
+    unsigned int *generation, unsigned int *owner)
+{
+    int suppress = 0;
+
+    if (generation != 0)
+    {
+        *generation = 0;
+    }
+    if (owner != 0)
+    {
+        *owner = 0;
+    }
+    if (cliprdr == 0 || ohos_cliprdr_lock_origin_state() != 0)
+    {
+        return 0;
+    }
+
+    if (g_cliprdr_remote_write_until != 0 &&
+            now > g_cliprdr_remote_write_until)
+    {
+        g_cliprdr_remote_write_owner = 0;
+        g_cliprdr_remote_write_until = 0;
+    }
+    if (g_cliprdr_remote_write_generation != 0 &&
+            g_cliprdr_remote_write_until != 0 &&
+            now <= g_cliprdr_remote_write_until &&
+            cliprdr->seen_remote_write_generation !=
+                g_cliprdr_remote_write_generation)
+    {
+        cliprdr->seen_remote_write_generation =
+            g_cliprdr_remote_write_generation;
+        if (generation != 0)
+        {
+            *generation = g_cliprdr_remote_write_generation;
+        }
+        if (owner != 0)
+        {
+            *owner = g_cliprdr_remote_write_owner;
+        }
+        suppress = 1;
+    }
+    ohos_cliprdr_unlock_origin_state();
+    return suppress;
+}
 
 const char *
 ohos_cliprdr_pasteboard_status_name(int status)
@@ -72,6 +217,27 @@ ohos_cliprdr_pasteboard_get_data(struct ohos_cliprdr *cliprdr,
         *status = rc;
     }
     return data;
+}
+
+int
+ohos_cliprdr_udmf_make_cross_app(OH_UdmfData *data)
+{
+    int rc;
+    OH_UdmfProperty *property;
+
+    if (data == 0)
+    {
+        return UDMF_E_INVALID_PARAM;
+    }
+
+    property = OH_UdmfProperty_Create(data);
+    if (property == 0)
+    {
+        return UDMF_E_INVALID_PARAM;
+    }
+    rc = OH_UdmfProperty_SetShareOption(property, SHARE_OPTIONS_CROSS_APP);
+    OH_UdmfProperty_Destroy(property);
+    return rc;
 }
 
 int
@@ -177,15 +343,19 @@ ohos_cliprdr_pasteboard_read_plain_text(struct ohos_cliprdr *cliprdr,
 void
 ohos_cliprdr_pasteboard_begin_remote_write(struct ohos_cliprdr *cliprdr)
 {
+    unsigned int now;
+
     if (cliprdr == 0)
     {
         return;
     }
+    now = g_get_elapsed_ms();
     if (ohos_cliprdr_lock(cliprdr) == 0)
     {
         cliprdr->ignore_local_changes++;
-        cliprdr->ignore_local_changes_until =
-            g_get_elapsed_ms() + OHOS_CLIPRDR_ECHO_SUPPRESS_MS;
+        cliprdr->ignore_local_changes_until = now +
+            OHOS_CLIPRDR_ECHO_SUPPRESS_MS;
+        ohos_cliprdr_mark_remote_write_origin_locked(cliprdr, now);
         ohos_cliprdr_unlock(cliprdr);
     }
 }
@@ -207,6 +377,7 @@ ohos_cliprdr_pasteboard_cancel_remote_write(struct ohos_cliprdr *cliprdr)
         {
             cliprdr->ignore_local_changes_until = 0;
         }
+        ohos_cliprdr_cancel_remote_write_origin_locked(cliprdr);
         ohos_cliprdr_unlock(cliprdr);
     }
 }
@@ -233,6 +404,14 @@ ohos_cliprdr_pasteboard_write_plain_text(struct ohos_cliprdr *cliprdr,
         LOG(LOG_LEVEL_ERROR, "xrdp.ohos.cliprdr: UDMF allocation failed");
         goto fail;
     }
+    rc = ohos_cliprdr_udmf_make_cross_app(data);
+    if (rc != UDMF_E_OK)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp.ohos.cliprdr: UDMF cross-app share setup failed rc=%d",
+            rc);
+        goto fail;
+    }
 
     rc = OH_UdsPlainText_SetContent(plain_text, text);
     if (rc == UDMF_E_OK)
@@ -250,33 +429,15 @@ ohos_cliprdr_pasteboard_write_plain_text(struct ohos_cliprdr *cliprdr,
         goto fail;
     }
 
-    if (ohos_cliprdr_lock(cliprdr) == 0)
-    {
-        cliprdr->ignore_local_changes++;
-        cliprdr->ignore_local_changes_until =
-            g_get_elapsed_ms() + OHOS_CLIPRDR_ECHO_SUPPRESS_MS;
-        ohos_cliprdr_unlock(cliprdr);
-    }
-
+    ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
-    LOG(LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.cliprdr: Pasteboard SetData text record=plain bytes=%d status=%d(%s)",
         text == 0 ? 0 : (int)g_strlen(text),
         rc, ohos_cliprdr_pasteboard_status_name(rc));
     if (rc != ERR_OK)
     {
-        if (ohos_cliprdr_lock(cliprdr) == 0)
-        {
-            if (cliprdr->ignore_local_changes > 0)
-            {
-                cliprdr->ignore_local_changes--;
-            }
-            if (cliprdr->ignore_local_changes == 0)
-            {
-                cliprdr->ignore_local_changes_until = 0;
-            }
-            ohos_cliprdr_unlock(cliprdr);
-        }
+        ohos_cliprdr_pasteboard_cancel_remote_write(cliprdr);
         goto fail;
     }
 
@@ -323,6 +484,10 @@ ohos_cliprdr_on_pasteboard_changed(void *context, Pasteboard_NotifyType type)
 {
     struct ohos_cliprdr *cliprdr = (struct ohos_cliprdr *)context;
     unsigned int now;
+    unsigned int remote_generation = 0;
+    unsigned int remote_owner = 0;
+    int local_suppress = 0;
+    int remote_suppress = 0;
     int suppress = 0;
 
     if (cliprdr == 0 || type != NOTIFY_LOCAL_DATA_CHANGE)
@@ -344,19 +509,31 @@ ohos_cliprdr_on_pasteboard_changed(void *context, Pasteboard_NotifyType type)
         {
             cliprdr->ignore_local_changes_until = 0;
         }
-        cliprdr->suppressed_changes++;
-        suppress = 1;
+        local_suppress = 1;
     }
     else
     {
         cliprdr->ignore_local_changes = 0;
         cliprdr->ignore_local_changes_until = 0;
+    }
+    remote_suppress =
+        ohos_cliprdr_should_suppress_remote_origin_locked(
+            cliprdr, now, &remote_generation, &remote_owner);
+    suppress = local_suppress || remote_suppress;
+    if (suppress)
+    {
+        cliprdr->suppressed_changes++;
+    }
+    else
+    {
         cliprdr->local_change_pending = 1;
     }
     ohos_cliprdr_unlock(cliprdr);
 
-    LOG(LOG_LEVEL_DEBUG,
-        "xrdp.ohos.cliprdr: Pasteboard changed suppress=%d", suppress);
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.cliprdr: Pasteboard changed suppress=%d local=%d remote=%d generation=%u owner=%u self=%u",
+        suppress, local_suppress, remote_suppress, remote_generation,
+        remote_owner, cliprdr->instance_id);
     if (!suppress && cliprdr->wake_obj != 0)
     {
         g_set_wait_obj(cliprdr->wake_obj);

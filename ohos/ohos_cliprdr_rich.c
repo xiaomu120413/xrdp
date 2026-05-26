@@ -228,16 +228,6 @@ ohos_cliprdr_pasteboard_read_uri(struct ohos_cliprdr *cliprdr, char **uri)
     }
     OH_UdmfData_Destroy(data);
 
-    if (ohos_cliprdr_pasteboard_read_plain_text(cliprdr, uri) == 0 &&
-            ohos_cliprdr_is_uri_text(*uri))
-    {
-        LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.cliprdr: Pasteboard read uri source=plain-text bytes=%d",
-            (int)g_strlen(*uri));
-        return 0;
-    }
-    g_free(*uri);
-    *uri = 0;
     LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard read uri found no uri data");
     return 1;
@@ -265,6 +255,14 @@ ohos_cliprdr_pasteboard_write_html(struct ohos_cliprdr *cliprdr,
     data = OH_UdmfData_Create();
     if (html_data == 0 || plain_text == 0 || record == 0 || data == 0)
     {
+        goto fail;
+    }
+    rc = ohos_cliprdr_udmf_make_cross_app(data);
+    if (rc != UDMF_E_OK)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp.ohos.cliprdr: UDMF html cross-app share setup failed rc=%d",
+            rc);
         goto fail;
     }
     rc = OH_UdsHtml_SetContent(html_data, html);
@@ -351,6 +349,14 @@ ohos_cliprdr_pasteboard_write_uri(struct ohos_cliprdr *cliprdr, const char *uri)
     plain_text = OH_UdsPlainText_Create();
     if (record == 0 || data == 0 || plain_text == 0)
     {
+        goto fail;
+    }
+    rc = ohos_cliprdr_udmf_make_cross_app(data);
+    if (rc != UDMF_E_OK)
+    {
+        LOG(LOG_LEVEL_ERROR,
+            "xrdp.ohos.cliprdr: UDMF uri cross-app share setup failed rc=%d",
+            rc);
         goto fail;
     }
     if (ohos_cliprdr_starts_with(uri, "http://") ||
