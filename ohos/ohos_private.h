@@ -22,6 +22,8 @@
 #define OHOS_MOUSE_LOG_SAMPLE 64
 #define OHOS_FRAME_TRACE_SLOTS 256
 #define OHOS_H264_QUEUE_LIMIT 30
+#define OHOS_DEFAULT_MAX_DESKTOP_WIDTH 1920
+#define OHOS_DEFAULT_MAX_DESKTOP_HEIGHT 1280
 
 struct ohos_frame_trace
 {
@@ -73,6 +75,8 @@ struct ohos_mod
     int height;
     int requested_width;
     int requested_height;
+    int max_desktop_width;
+    int max_desktop_height;
     int bpp;
     int connected;
     struct ohos_desktop_size desktop_size;

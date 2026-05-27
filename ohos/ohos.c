@@ -24,6 +24,8 @@ mod_init(void)
     ohos_input_init(&self->input);
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
     ohos_rdpsnd_init(&self->rdpsnd, &self->mod, self->frame_wait_obj);
+    self->max_desktop_width = OHOS_DEFAULT_MAX_DESKTOP_WIDTH;
+    self->max_desktop_height = OHOS_DEFAULT_MAX_DESKTOP_HEIGHT;
     self->mod.size = sizeof(struct mod);
     self->mod.version = XRDP_OHOS_MOD_VERSION;
     self->mod.handle = (tintptr)self;

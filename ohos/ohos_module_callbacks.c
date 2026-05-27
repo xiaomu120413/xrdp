@@ -40,6 +40,28 @@ ohos_param_log_value(const char *name, const char *value)
 }
 
 static int
+ohos_parse_desktop_limit_param(const char *value, int current_value)
+{
+    int parsed;
+
+    if (value == 0 || value[0] == '\0')
+    {
+        return current_value;
+    }
+
+    parsed = g_atoi(value);
+    if (parsed == 0)
+    {
+        return 0;
+    }
+    if (parsed < 200 || parsed > XRDP_OHOS_FRAME_MAX_DIMENSION)
+    {
+        return current_value;
+    }
+    return parsed;
+}
+
+static int
 ohos_access_authorized(struct ohos_mod *self)
 {
     if (self->access_code[0] == '\0')
@@ -156,15 +178,20 @@ ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
     old_width = self->width;
     old_height = self->height;
     if (ohos_select_desktop_size(requested_width, requested_height,
+                                 self->max_desktop_width,
+                                 self->max_desktop_height,
                                  &desktop) != 0)
     {
         desktop.requested_width = requested_width;
         desktop.requested_height = requested_height;
         desktop.target_width = requested_width;
         desktop.target_height = requested_height;
+        desktop.max_width = self->max_desktop_width;
+        desktop.max_height = self->max_desktop_height;
         desktop.display_width = 0;
         desktop.display_height = 0;
         desktop.normalized = 0;
+        desktop.limited_by_max = 0;
         desktop.valid_display = 0;
     }
 
@@ -178,13 +205,15 @@ ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
             desktop.normalized)
     {
         LOG(LOG_LEVEL_INFO,
-            "xrdp.ohos.resize: desktop reason=%s requested=%dx%d target=%dx%d old=%dx%d display=%dx%d display_valid=%d normalized=%d connected=%d",
+            "xrdp.ohos.resize: desktop reason=%s requested=%dx%d target=%dx%d old=%dx%d display=%dx%d max=%dx%d display_valid=%d normalized=%d limited_by_max=%d connected=%d",
             reason == 0 ? "" : reason,
             desktop.requested_width, desktop.requested_height,
             desktop.target_width, desktop.target_height,
             old_width, old_height,
             desktop.display_width, desktop.display_height,
-            desktop.valid_display, desktop.normalized, self->connected);
+            desktop.max_width, desktop.max_height,
+            desktop.valid_display, desktop.normalized,
+            desktop.limited_by_max, self->connected);
     }
 
     if (request_client_resize && desktop.normalized)
@@ -192,14 +221,26 @@ ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
         resize_rv = ohos_mod_request_client_desktop_size(self, reason);
         if (resize_rv != 0)
         {
-            self->desktop_size.target_width = requested_width;
-            self->desktop_size.target_height = requested_height;
-            self->desktop_size.normalized = 0;
-            self->width = requested_width;
-            self->height = requested_height;
-            LOG(LOG_LEVEL_WARNING,
-                "xrdp.ohos.resize: fallback to requested desktop reason=%s desktop=%dx%d",
-                reason == 0 ? "" : reason, self->width, self->height);
+            if (desktop.limited_by_max)
+            {
+                LOG(LOG_LEVEL_WARNING,
+                    "xrdp.ohos.resize: client resize request failed but keeping capped desktop reason=%s requested=%dx%d target=%dx%d max=%dx%d rv=%d",
+                    reason == 0 ? "" : reason,
+                    requested_width, requested_height,
+                    self->width, self->height,
+                    desktop.max_width, desktop.max_height, resize_rv);
+            }
+            else
+            {
+                self->desktop_size.target_width = requested_width;
+                self->desktop_size.target_height = requested_height;
+                self->desktop_size.normalized = 0;
+                self->width = requested_width;
+                self->height = requested_height;
+                LOG(LOG_LEVEL_WARNING,
+                    "xrdp.ohos.resize: fallback to requested desktop reason=%s desktop=%dx%d",
+                    reason == 0 ? "" : reason, self->width, self->height);
+            }
         }
     }
 
@@ -447,6 +488,16 @@ ohos_mod_set_param(struct mod *mod, const char *name, const char *value)
     else if (g_strncmp(name, "access_code", 255) == 0)
     {
         g_strncpy(self->access_code, value, sizeof(self->access_code) - 1);
+    }
+    else if (g_strncmp(name, "max_desktop_width", 255) == 0)
+    {
+        self->max_desktop_width = ohos_parse_desktop_limit_param(
+            value, self->max_desktop_width);
+    }
+    else if (g_strncmp(name, "max_desktop_height", 255) == 0)
+    {
+        self->max_desktop_height = ohos_parse_desktop_limit_param(
+            value, self->max_desktop_height);
     }
 
     LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.module: param %s=%s", name,
