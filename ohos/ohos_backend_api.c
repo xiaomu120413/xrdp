@@ -8,6 +8,16 @@
 #include "os_calls.h"
 #include "string_calls.h"
 
+static uint64_t
+ohos_h264_interval_us_from_frame_rate(uint32_t frame_rate)
+{
+    if (frame_rate == 0 || frame_rate > OHOS_H264_MAX_FRAME_RATE)
+    {
+        frame_rate = OHOS_H264_DEFAULT_FRAME_RATE;
+    }
+    return 1000000ULL / frame_rate;
+}
+
 int EXPORT_CC
 xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info)
 {
@@ -253,7 +263,10 @@ xrdp_ohos_backend_submit_encoded_frame(
     uint64_t backend_pending_us;
     int sequence;
     int queue_count;
+    int cleared_count;
+    int sync_frame;
     int waiting_for_sync;
+    uint64_t wait_signal_count;
 
     backend_submit_us = ohos_now_us();
     if (frame == 0 || frame->data == 0 || frame->bytes <= 0 ||
@@ -312,8 +325,8 @@ xrdp_ohos_backend_submit_encoded_frame(
         return XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
     }
 
-    waiting_for_sync = target->h264_waiting_for_sync &&
-                       ((frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) == 0);
+    sync_frame = (frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) != 0;
+    waiting_for_sync = target->h264_waiting_for_sync && !sync_frame;
     if (waiting_for_sync)
     {
         target->h264_drop_count++;
@@ -332,10 +345,10 @@ xrdp_ohos_backend_submit_encoded_frame(
 
     if (target->h264_queue_count >= OHOS_H264_QUEUE_LIMIT)
     {
-        target->h264_drop_count++;
-        target->h264_waiting_for_sync = 1;
-        if ((frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) == 0)
+        if (!sync_frame)
         {
+            target->h264_drop_count++;
+            target->h264_waiting_for_sync = 1;
             LOG(LOG_LEVEL_WARNING,
                 "xrdp.ohos.h264: queue overflow count=%d limit=%d source_seq=%llu dropped=%d; waiting for sync frame",
                 target->h264_queue_count, OHOS_H264_QUEUE_LIMIT,
@@ -345,14 +358,18 @@ xrdp_ohos_backend_submit_encoded_frame(
             ohos_free_h264_frame(queued);
             return XRDP_OHOS_BACKEND_STATUS_BACKPRESSURE;
         }
+        cleared_count = target->h264_queue_count;
         ohos_clear_h264_queue_locked(target);
+        target->h264_drop_count += cleared_count;
         target->h264_waiting_for_sync = 0;
     }
-    else if ((frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) != 0)
+    else if (sync_frame)
     {
         if (target->h264_waiting_for_sync)
         {
+            cleared_count = target->h264_queue_count;
             ohos_clear_h264_queue_locked(target);
+            target->h264_drop_count += cleared_count;
         }
         target->h264_waiting_for_sync = 0;
     }
@@ -394,6 +411,7 @@ xrdp_ohos_backend_submit_encoded_frame(
     target->h264_tail = queued;
     target->h264_queue_count++;
     target->h264_frame_submit_count++;
+    wait_signal_count = ++target->frame_wait_signal_count;
     queue_count = target->h264_queue_count;
     wait_obj = target->frame_wait_obj;
     ohos_unlock_frame_state();
@@ -406,16 +424,128 @@ xrdp_ohos_backend_submit_encoded_frame(
     {
         g_set_wait_obj(wait_obj);
     }
-    if (sequence <= 5 || (sequence % 60) == 0 || queue_count > 1)
+    if (sequence <= 5 || (sequence % 60) == 0 ||
+            wait_signal_count <= 5 || (wait_signal_count % 300ULL) == 0)
     {
         LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.h264: queued encoded frame seq=%d source_seq=%llu bytes=%d queue=%d sync=%d",
+            "xrdp.ohos.h264: queued encoded frame seq=%d source_seq=%llu bytes=%d queue=%d sync=%d wait_signal=%llu wait_obj=%p",
             sequence, (unsigned long long)frame->source_sequence,
             frame->bytes, queue_count,
-            (frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) != 0);
+            (frame->flags & XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC) != 0,
+            (unsigned long long)wait_signal_count, (void *)wait_obj);
     }
 
     return XRDP_OHOS_BACKEND_STATUS_OK;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_set_encoded_frame_rate(uint32_t frame_rate)
+{
+    struct ohos_mod *target;
+    uint64_t interval_us;
+
+    if (frame_rate == 0 || frame_rate > OHOS_H264_MAX_FRAME_RATE)
+    {
+        frame_rate = OHOS_H264_DEFAULT_FRAME_RATE;
+    }
+    interval_us = ohos_h264_interval_us_from_frame_rate(frame_rate);
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_LOCK_FAILED;
+    }
+
+    target = g_ohos_active_mod;
+    if (target == 0 || !target->connected)
+    {
+        ohos_unlock_frame_state();
+        return XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
+    }
+
+    target->h264_target_frame_rate = frame_rate;
+    target->h264_render_min_interval_us = interval_us;
+    ohos_unlock_frame_state();
+
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.h264: target frame rate set fps=%u interval_us=%llu",
+        frame_rate, (unsigned long long)interval_us);
+    return XRDP_OHOS_BACKEND_STATUS_OK;
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_can_accept_encoded_frame(void)
+{
+    struct ohos_mod *target;
+    uint64_t now_us;
+    uint64_t elapsed_us = 0;
+    uint64_t target_interval_us = OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US;
+    const char *skip_reason = 0;
+    int frames_in_flight = 0;
+    int status = XRDP_OHOS_BACKEND_STATUS_BACKPRESSURE;
+
+    if (ohos_lock_frame_state() != 0)
+    {
+        return XRDP_OHOS_BACKEND_STATUS_LOCK_FAILED;
+    }
+
+    target = g_ohos_active_mod;
+    if (target == 0 || !target->connected)
+    {
+        status = XRDP_OHOS_BACKEND_STATUS_NO_ACTIVE_SESSION;
+    }
+    else
+    {
+        now_us = ohos_now_us();
+        if (target->h264_flow_ack_frame_id > target->frame_sequence)
+        {
+            target->h264_flow_ack_frame_id = target->frame_sequence;
+        }
+        frames_in_flight = target->frame_sequence -
+                           target->h264_flow_ack_frame_id;
+        elapsed_us = target->h264_last_accept_us == 0 ? 0 :
+                     now_us - target->h264_last_accept_us;
+        target_interval_us = target->h264_render_min_interval_us == 0 ?
+                             OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US :
+                             target->h264_render_min_interval_us;
+        if (target->h264_queue_count >= OHOS_H264_QUEUE_LIMIT)
+        {
+            skip_reason = "module-queue";
+        }
+        else if (frames_in_flight >= OHOS_H264_FLOW_LIMIT)
+        {
+            skip_reason = "xrdp-frame-ack";
+        }
+        else if (target->h264_last_accept_us != 0 &&
+                 elapsed_us < target_interval_us)
+        {
+            skip_reason = "frame-interval";
+        }
+        else
+        {
+            target->h264_last_accept_us = now_us;
+            status = XRDP_OHOS_BACKEND_STATUS_OK;
+            skip_reason = 0;
+        }
+        if (skip_reason != 0)
+        {
+            target->h264_pre_encode_skip_count++;
+            if (target->h264_pre_encode_skip_count <= 3 ||
+                    (target->h264_pre_encode_skip_count % 300ULL) == 0)
+            {
+                LOG(LOG_LEVEL_DEBUG,
+                    "xrdp.ohos.h264: skip encode before encoder reason=%s elapsed_us=%llu target_interval_us=%llu queue=%d queue_limit=%d in_flight=%d flow_limit=%d ack=%d frame=%d skipped=%llu",
+                    skip_reason, (unsigned long long)elapsed_us,
+                    (unsigned long long)target_interval_us,
+                    target->h264_queue_count, OHOS_H264_QUEUE_LIMIT,
+                    frames_in_flight, OHOS_H264_FLOW_LIMIT,
+                    target->h264_flow_ack_frame_id, target->frame_sequence,
+                    (unsigned long long)target->h264_pre_encode_skip_count);
+            }
+        }
+    }
+
+    ohos_unlock_frame_state();
+    return status;
 }
 
 int EXPORT_CC

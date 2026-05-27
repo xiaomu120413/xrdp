@@ -79,12 +79,20 @@ ohos_reset_session_stats(struct ohos_mod *self)
     self->monitor_full_invalidate_count = 0;
     self->raw_frame_submit_count = 0;
     self->h264_frame_submit_count = 0;
+    self->frame_wait_signal_count = 0;
+    self->frame_wait_wake_count = 0;
     self->audio_frame_submit_count = 0;
     self->audio_bytes_submitted = 0;
     self->mouse_move_count = 0;
     self->frame_draw_count = 0;
     self->h264_drop_count = 0;
     self->h264_waiting_for_sync = 0;
+    self->h264_flow_ack_frame_id = self->frame_sequence;
+    self->h264_pre_encode_skip_count = 0;
+    self->h264_last_accept_us = 0;
+    self->h264_target_frame_rate = OHOS_H264_DEFAULT_FRAME_RATE;
+    self->h264_render_min_interval_us =
+        OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US;
     ohos_cursor_init(&self->cursor);
 }
 
@@ -96,6 +104,9 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
     int h264_queue_count = 0;
     int h264_drop_count = 0;
     int h264_waiting_for_sync = 0;
+    uint64_t h264_pre_encode_skip_count = 0;
+    uint32_t h264_target_frame_rate = 0;
+    uint64_t h264_render_min_interval_us = 0;
 
     if (self == 0)
     {
@@ -112,6 +123,9 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
         h264_queue_count = self->h264_queue_count;
         h264_drop_count = self->h264_drop_count;
         h264_waiting_for_sync = self->h264_waiting_for_sync;
+        h264_pre_encode_skip_count = self->h264_pre_encode_skip_count;
+        h264_target_frame_rate = self->h264_target_frame_rate;
+        h264_render_min_interval_us = self->h264_render_min_interval_us;
         ohos_unlock_frame_state();
     }
 
@@ -136,8 +150,11 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
         self->cliprdr.pasteboard_reads, self->cliprdr.pasteboard_writes,
         self->cliprdr.errors);
     LOG(LOG_LEVEL_DEBUG,
-        "xrdp.ohos.session: frame detail client=%s h264_queue=%d h264_waiting_sync=%d rdpsnd_submitted=%u rdpsnd_sent_chunks=%u rdpsnd_sent_bytes=%u rdpsnd_errors=%u",
+        "xrdp.ohos.session: frame detail client=%s h264_queue=%d h264_waiting_sync=%d h264_pre_encode_skips=%llu h264_target_fps=%u h264_interval_us=%llu rdpsnd_submitted=%u rdpsnd_sent_chunks=%u rdpsnd_sent_bytes=%u rdpsnd_errors=%u",
         self->client_name, h264_queue_count, h264_waiting_for_sync,
+        (unsigned long long)h264_pre_encode_skip_count,
+        h264_target_frame_rate,
+        (unsigned long long)h264_render_min_interval_us,
         self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,
         self->rdpsnd.sent_bytes, self->rdpsnd.errors);
     LOG(LOG_LEVEL_DEBUG,

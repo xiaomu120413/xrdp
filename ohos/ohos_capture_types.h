@@ -36,10 +36,12 @@ using VideoFrameSubmitFn = bool (*)(const xrdp_ohos_frame& frame,
     std::string& message, void* userData);
 using EncodedVideoFrameSubmitFn = bool (*)(const xrdp_ohos_encoded_frame& frame,
     std::string& message, void* userData);
+using EncodedVideoReadyFn = bool (*)(void* userData);
 
 struct CaptureSubmitCallbacks {
     VideoFrameSubmitFn submitVideo = nullptr;
     EncodedVideoFrameSubmitFn submitEncodedVideo = nullptr;
+    EncodedVideoReadyFn canAcceptEncodedVideo = nullptr;
     AudioCaptureSubmitFn submitAudio = nullptr;
     void* userData = nullptr;
 };

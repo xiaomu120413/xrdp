@@ -40,7 +40,7 @@ private:
     void StoreCodecConfig(const uint8_t* data, size_t bytes);
     void AppendOutputPayload(const uint8_t* data, size_t bytes);
     void SubmitEncodedFrame(const CaptureOptions& target, const OH_AVCodecBufferAttr& attr,
-        const std::vector<uint8_t>& payload);
+        const std::vector<uint8_t>& payload, bool syncFrame);
     void RequestKeyFrame(const char* reason);
 
     static void Cleanup(OH_AVCodec* codec, OHNativeWindow* surface,
@@ -59,6 +59,7 @@ private:
     std::vector<uint8_t> codecConfig_;
     std::vector<uint8_t> pendingPayload_;
     uint64_t captureErrorCount_ = 0;
+    uint64_t lastBackpressureKeyFrameRequestUs_ = 0;
     std::atomic<uint64_t> outputCount_ { 0 };
     std::atomic<uint64_t> submittedCount_ { 0 };
     std::atomic<uint64_t> droppedCount_ { 0 };

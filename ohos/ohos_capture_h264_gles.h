@@ -26,7 +26,8 @@ public:
     SurfaceH264GlesStage& operator=(const SurfaceH264GlesStage&) = delete;
 
     bool Start(OHNativeWindow* encoderSurface, uint32_t width, uint32_t height,
-        OHNativeWindow** captureSurface, std::string& message);
+        OHNativeWindow** captureSurface, bool (*canRender)(void*), void* canRenderUserData,
+        std::string& message);
     void Stop(const std::string& reason);
     bool running() const;
 
@@ -40,7 +41,7 @@ private:
         std::string& message);
     void RenderLoop();
     void NotifyFrameAvailable();
-    bool RenderOneFrame(uint64_t frameId);
+    bool RenderOneFrame(uint64_t frameId, bool renderToEncoder);
     void DestroyGl();
     void DestroyNativeImage();
 
@@ -49,6 +50,9 @@ private:
     std::condition_variable condition_;
     uint64_t pendingFrames_ = 0;
     uint64_t renderedFrames_ = 0;
+    uint64_t skippedFrames_ = 0;
+    bool (*canRender_)(void*) = nullptr;
+    void* canRenderUserData_ = nullptr;
 
     EGLDisplay display_ = EGL_NO_DISPLAY;
     EGLConfig config_ = nullptr;

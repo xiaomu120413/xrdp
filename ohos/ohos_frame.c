@@ -362,6 +362,7 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
                 ohos_frame_format_name(frame_format));
         }
         g_free(data);
+        ohos_signal_more_frames(wait_obj, more_pending);
         return 0;
     }
 

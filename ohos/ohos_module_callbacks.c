@@ -531,8 +531,40 @@ ohos_mod_check_wait_objs(struct mod *mod)
     int rv = 0;
     if (self->frame_wait_obj != 0 && g_is_wait_obj_set(self->frame_wait_obj))
     {
+        int before_queue = 0;
+        int before_pending = 0;
+        int after_queue = 0;
+        int after_pending = 0;
+        uint64_t wake_count = ++self->frame_wait_wake_count;
+        if (ohos_lock_frame_state() == 0)
+        {
+            before_queue = self->h264_queue_count;
+            before_pending = self->frame_pending;
+            ohos_unlock_frame_state();
+        }
+        if (wake_count <= 5 || (wake_count % 300ULL) == 0)
+        {
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.frame: wait wake=%llu before queue=%d pending=%d drawn=%d signals=%llu",
+                (unsigned long long)wake_count, before_queue, before_pending,
+                self->frame_draw_count,
+                (unsigned long long)self->frame_wait_signal_count);
+        }
         g_reset_wait_obj(self->frame_wait_obj);
         rv |= ohos_draw_external_frame(self, 0);
+        if (ohos_lock_frame_state() == 0)
+        {
+            after_queue = self->h264_queue_count;
+            after_pending = self->frame_pending;
+            ohos_unlock_frame_state();
+        }
+        if (wake_count <= 5 || (wake_count % 300ULL) == 0)
+        {
+            LOG(LOG_LEVEL_DEBUG,
+                "xrdp.ohos.frame: wait handled wake=%llu rv=%d after queue=%d pending=%d drawn=%d",
+                (unsigned long long)wake_count, rv, after_queue, after_pending,
+                self->frame_draw_count);
+        }
     }
     rv |= ohos_rdpsnd_check_wait_objs(&self->rdpsnd);
     rv |= ohos_cliprdr_check_wait_objs(&self->cliprdr);
@@ -553,6 +585,14 @@ ohos_mod_frame_ack(struct mod *mod, int flags, int frame_id)
     ack_us = ohos_now_us();
     has_trace = ohos_lookup_frame_trace(self, frame_id, &trace);
     self->frame_ack_count++;
+    if (ohos_lock_frame_state() == 0)
+    {
+        if (frame_id > self->h264_flow_ack_frame_id)
+        {
+            self->h264_flow_ack_frame_id = frame_id;
+        }
+        ohos_unlock_frame_state();
+    }
     if (has_trace && (self->frame_ack_count <= 5 ||
             (self->frame_ack_count % 60ULL) == 0))
     {

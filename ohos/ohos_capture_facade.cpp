@@ -57,6 +57,11 @@ bool SubmitEncodedFrame(const xrdp_ohos_encoded_frame& frame, std::string& messa
     return false;
 }
 
+bool CanAcceptEncodedFrame(void*)
+{
+    return xrdp_ohos_backend_can_accept_encoded_frame() == XRDP_OHOS_BACKEND_STATUS_OK;
+}
+
 bool SubmitAudioFrame(const xrdp_ohos_audio_frame& frame, std::string& message, void*)
 {
     const int status = xrdp_ohos_backend_submit_audio_frame(&frame);
@@ -73,6 +78,7 @@ RawScreenCapture& RawCapture()
     static RawScreenCapture capture({
         SubmitRawFrame,
         nullptr,
+        nullptr,
         SubmitAudioFrame,
         nullptr,
     });
@@ -84,6 +90,7 @@ SurfaceH264Capture& SurfaceCapture()
     static SurfaceH264Capture capture({
         nullptr,
         SubmitEncodedFrame,
+        CanAcceptEncodedFrame,
         SubmitAudioFrame,
         nullptr,
     });
@@ -92,6 +99,13 @@ SurfaceH264Capture& SurfaceCapture()
 
 bool StartScreenCapture(const CaptureOptions& options, std::string& message, void*)
 {
+    const int frameRateStatus = xrdp_ohos_backend_set_encoded_frame_rate(options.frameRate);
+    if (frameRateStatus != XRDP_OHOS_BACKEND_STATUS_OK) {
+        EmitCaptureInfo("xrdp surface H264 target frame rate not applied status=" +
+            std::to_string(frameRateStatus) +
+            " fps=" + std::to_string(options.frameRate));
+    }
+
     std::string surfaceMessage;
     if (SurfaceCapture().Start(options, surfaceMessage)) {
         message = surfaceMessage + " mode=surface-h264";

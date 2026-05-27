@@ -51,7 +51,7 @@ void CaptureController::HandleBackendEvent(const xrdp_ohos_backend_event& event)
             break;
         case XRDP_OHOS_BACKEND_EVENT_SUPPRESS_OUTPUT:
             if (event.suppress != 0) {
-                StopForClient("xrdp output suppressed");
+                EmitCaptureInfo("xrdp output suppressed by client; keep capture running to avoid stale MSTSC video");
             } else if (event.connected != 0 && event.width > 0 && event.height > 0) {
                 StartForClient(static_cast<uint32_t>(event.width),
                     static_cast<uint32_t>(event.height));

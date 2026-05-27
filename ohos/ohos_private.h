@@ -21,7 +21,11 @@
 
 #define OHOS_MOUSE_LOG_SAMPLE 64
 #define OHOS_FRAME_TRACE_SLOTS 256
-#define OHOS_H264_QUEUE_LIMIT 30
+#define OHOS_H264_QUEUE_LIMIT 2
+#define OHOS_H264_FLOW_LIMIT 2
+#define OHOS_H264_DEFAULT_FRAME_RATE 60U
+#define OHOS_H264_MAX_FRAME_RATE 120U
+#define OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US 16666ULL
 #define OHOS_DEFAULT_MAX_DESKTOP_WIDTH 2560
 #define OHOS_DEFAULT_MAX_DESKTOP_HEIGHT 1440
 
@@ -98,6 +102,8 @@ struct ohos_mod
     uint64_t monitor_full_invalidate_count;
     uint64_t raw_frame_submit_count;
     uint64_t h264_frame_submit_count;
+    uint64_t frame_wait_signal_count;
+    uint64_t frame_wait_wake_count;
     uint64_t audio_frame_submit_count;
     uint64_t audio_bytes_submitted;
     int mouse_move_count;
@@ -126,6 +132,11 @@ struct ohos_mod
     int h264_queue_count;
     int h264_drop_count;
     int h264_waiting_for_sync;
+    int h264_flow_ack_frame_id;
+    uint64_t h264_pre_encode_skip_count;
+    uint64_t h264_last_accept_us;
+    uint32_t h264_target_frame_rate;
+    uint64_t h264_render_min_interval_us;
     char client_name[256];
     char access_code[64];
     char login_password[256];

@@ -424,6 +424,67 @@ size_t FindStartCode(const uint8_t* data, size_t offset, size_t bytes)
     return bytes;
 }
 
+bool NalTypeMatches(uint8_t nalType, uint8_t wanted)
+{
+    if (wanted == 0xffU) {
+        return nalType == 7U || nalType == 8U;
+    }
+    return nalType == wanted;
+}
+
+bool PayloadHasNalTypeWithStartCodes(const uint8_t* data, size_t bytes, uint8_t wanted)
+{
+    size_t offset = FindStartCode(data, 0, bytes);
+    while (offset < bytes) {
+        const size_t startBytes = StartCodeBytes(data, offset, bytes);
+        if (startBytes == 0U) {
+            break;
+        }
+        const size_t nalOffset = offset + startBytes;
+        const size_t nextOffset = FindStartCode(data, nalOffset, bytes);
+        if (nalOffset < nextOffset && NalTypeMatches(data[nalOffset] & 0x1fU, wanted)) {
+            return true;
+        }
+        offset = nextOffset;
+    }
+    return false;
+}
+
+bool PayloadHasNalTypeLengthPrefixed(const uint8_t* data, size_t bytes, uint8_t wanted)
+{
+    if (data == nullptr || bytes <= 4U) {
+        return false;
+    }
+
+    size_t offset = 0;
+    while (offset + 4U < bytes) {
+        const size_t nalBytes = static_cast<size_t>(ReadBe32(data + offset));
+        offset += 4U;
+        if (nalBytes == 0U || nalBytes > bytes - offset) {
+            return false;
+        }
+        if (NalTypeMatches(data[offset] & 0x1fU, wanted)) {
+            return true;
+        }
+        offset += nalBytes;
+    }
+    return false;
+}
+
+bool PayloadHasNalType(const uint8_t* data, size_t bytes, uint8_t wanted)
+{
+    if (data == nullptr || bytes == 0U) {
+        return false;
+    }
+    if (HasStartCode(data, bytes)) {
+        return PayloadHasNalTypeWithStartCodes(data, bytes, wanted);
+    }
+    if (PayloadHasNalTypeLengthPrefixed(data, bytes, wanted)) {
+        return true;
+    }
+    return NalTypeMatches(data[0] & 0x1fU, wanted);
+}
+
 } // namespace
 
 void AppendH264Payload(std::vector<uint8_t>& target, const uint8_t* data, size_t bytes)
@@ -446,6 +507,16 @@ void AppendH264Payload(std::vector<uint8_t>& target, const uint8_t* data, size_t
     }
     target.resize(oldSize);
     AppendBytes(target, data, bytes);
+}
+
+bool H264PayloadHasIdr(const uint8_t* data, size_t bytes)
+{
+    return PayloadHasNalType(data, bytes, 5U);
+}
+
+bool H264PayloadHasParameterSet(const uint8_t* data, size_t bytes)
+{
+    return PayloadHasNalType(data, bytes, 0xffU);
 }
 
 std::string DescribeH264ParameterSets(const uint8_t* data, size_t bytes)

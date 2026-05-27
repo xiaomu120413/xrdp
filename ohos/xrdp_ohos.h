@@ -271,6 +271,12 @@ xrdp_ohos_backend_submit_encoded_frame(
     const struct xrdp_ohos_encoded_frame *frame);
 
 XRDP_OHOS_API int
+xrdp_ohos_backend_can_accept_encoded_frame(void);
+
+XRDP_OHOS_API int
+xrdp_ohos_backend_set_encoded_frame_rate(uint32_t frame_rate);
+
+XRDP_OHOS_API int
 xrdp_ohos_backend_submit_audio_frame(
     const struct xrdp_ohos_audio_frame *frame);
 

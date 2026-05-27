@@ -100,7 +100,8 @@ bool SurfaceH264Capture::Start(CaptureOptions options, std::string& message)
         return false;
     }
     std::string gpuMessage;
-    if (!gpuStage_.Start(surface, options.width, options.height, &captureSurface, gpuMessage)) {
+    if (!gpuStage_.Start(surface, options.width, options.height, &captureSurface,
+        callbacks_.canAcceptEncodedVideo, callbacks_.userData, gpuMessage)) {
         Cleanup(codec, surface, capture, true);
         message = "xrdp surface H264 GPU converter unavailable: " + gpuMessage;
         EmitCaptureError("xrdp surface H264 capture start failed: " + message);
@@ -124,6 +125,7 @@ bool SurfaceH264Capture::Start(CaptureOptions options, std::string& message)
     submittedCount_.store(0);
     droppedCount_.store(0);
     captureErrorCount_ = 0;
+    lastBackpressureKeyFrameRequestUs_ = 0;
     codecConfig_.clear();
     pendingPayload_.clear();
     audioPump_.Start(capture, "surface-h264");
@@ -390,9 +392,9 @@ bool SurfaceH264Capture::DrainOneOutput()
         return true;
     }
 
-    const bool syncFrame = (attr.flags & AVCODEC_BUFFER_FLAGS_SYNC_FRAME) != 0;
+    const bool codecFlagSync = (attr.flags & AVCODEC_BUFFER_FLAGS_SYNC_FRAME) != 0;
     const bool incomplete = (attr.flags & AVCODEC_BUFFER_FLAGS_INCOMPLETE_FRAME) != 0;
-    if (syncFrame) {
+    if (codecFlagSync) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!codecConfig_.empty() && pendingPayload_.empty()) {
             pendingPayload_.insert(pendingPayload_.end(), codecConfig_.begin(), codecConfig_.end());
@@ -413,7 +415,19 @@ bool SurfaceH264Capture::DrainOneOutput()
         return true;
     }
 
-    SubmitEncodedFrame(target, attr, framePayload);
+    bool syncFrame = codecFlagSync || H264PayloadHasIdr(framePayload.data(), framePayload.size());
+    if (syncFrame && !H264PayloadHasParameterSet(framePayload.data(), framePayload.size())) {
+        std::vector<uint8_t> codecConfig;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            codecConfig = codecConfig_;
+        }
+        if (!codecConfig.empty()) {
+            framePayload.insert(framePayload.begin(), codecConfig.begin(), codecConfig.end());
+        }
+    }
+
+    SubmitEncodedFrame(target, attr, framePayload, syncFrame);
     return true;
 }
 
@@ -474,7 +488,7 @@ void SurfaceH264Capture::AppendOutputPayload(const uint8_t* data, size_t bytes)
 }
 
 void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
-    const OH_AVCodecBufferAttr& attr, const std::vector<uint8_t>& payload)
+    const OH_AVCodecBufferAttr& attr, const std::vector<uint8_t>& payload, bool syncFrame)
 {
     const uint64_t sequence = outputCount_.fetch_add(1) + 1;
     const uint64_t outputUs = NowUs();
@@ -485,8 +499,7 @@ void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
     frame.width = static_cast<int>(target.width);
     frame.height = static_cast<int>(target.height);
     frame.format = XRDP_OHOS_ENCODED_FRAME_FORMAT_H264_AVC420;
-    frame.flags = (attr.flags & AVCODEC_BUFFER_FLAGS_SYNC_FRAME) != 0 ?
-        XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC : 0U;
+    frame.flags = syncFrame ? XRDP_OHOS_ENCODED_FRAME_FLAG_SYNC : 0U;
     frame.source_sequence = sequence;
     frame.capture_timestamp_us = captureUs;
     frame.capture_acquire_us = captureUs;
@@ -503,6 +516,7 @@ void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
                 " size=" + std::to_string(target.width) + "x" + std::to_string(target.height) +
                 " bytes=" + std::to_string(payload.size()) +
                 " flags=0x" + std::to_string(static_cast<uint32_t>(attr.flags)) +
+                " sync=" + std::to_string(syncFrame ? 1 : 0) +
                 " pts=" + std::to_string(attr.pts) +
                 " submitted=" + std::to_string(submitted));
         }
@@ -511,7 +525,8 @@ void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
 
     if (message != "xrdp server is not running") {
         const uint64_t dropped = droppedCount_.fetch_add(1) + 1;
-        if (message == "xrdp encoded video submit status=-6") {
+        if (message.find("backpressure") != std::string::npos ||
+            message == "xrdp encoded video submit status=-6") {
             RequestKeyFrame("xrdp h264 backpressure");
         }
         if (dropped <= 5 || (dropped % 120U) == 0U) {
@@ -525,8 +540,18 @@ void SurfaceH264Capture::SubmitEncodedFrame(const CaptureOptions& target,
 void SurfaceH264Capture::RequestKeyFrame(const char* reason)
 {
     OH_AVCodec* codec = nullptr;
+    const std::string reasonText = reason == nullptr ? "unknown" : reason;
+    const bool backpressure = reasonText.find("backpressure") != std::string::npos;
+    const uint64_t nowUs = NowUs();
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (backpressure && lastBackpressureKeyFrameRequestUs_ != 0 &&
+            nowUs - lastBackpressureKeyFrameRequestUs_ < 500000U) {
+            return;
+        }
+        if (backpressure) {
+            lastBackpressureKeyFrameRequestUs_ = nowUs;
+        }
         codec = codec_;
     }
     RequestSurfaceH264KeyFrame(codec, reason);
