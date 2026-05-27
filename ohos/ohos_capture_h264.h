@@ -2,6 +2,7 @@
 #define XRDP_OHOS_CAPTURE_H264_H
 
 #include "ohos/ohos_capture_types.h"
+#include "ohos/ohos_capture_h264_gles.h"
 
 #include <atomic>
 #include <mutex>
@@ -31,8 +32,8 @@ private:
 
     void HandleCaptureError(int32_t errorCode);
     void HandleAudioReady(OH_AVScreenCapture* capture, bool isReady, OH_AudioCaptureSourceType type);
-    bool CreateCapture(const CaptureOptions& options, OHNativeWindow* surface,
-        OH_AVScreenCapture** outCapture, std::string& message);
+    bool CreateCapture(const CaptureOptions& options, OH_AVScreenCapture** outCapture,
+        std::string& message);
     void OutputLoop();
     bool DrainOneOutput();
     void UpdateOutputDescription(OH_AVCodec* codec);
@@ -50,6 +51,7 @@ private:
     std::atomic<bool> running_ { false };
     OH_AVCodec* codec_ = nullptr;
     OHNativeWindow* inputSurface_ = nullptr;
+    OHNativeWindow* captureSurface_ = nullptr;
     OH_AVScreenCapture* capture_ = nullptr;
     OH_VideoSourceType captureSource_ = OH_VIDEO_SOURCE_SURFACE_RGBA;
     std::thread outputThread_;
@@ -61,6 +63,7 @@ private:
     std::atomic<uint64_t> submittedCount_ { 0 };
     std::atomic<uint64_t> droppedCount_ { 0 };
     AudioCapturePump audioPump_;
+    SurfaceH264GlesStage gpuStage_;
 };
 
 } // namespace xrdp_ohos

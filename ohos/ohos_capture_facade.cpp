@@ -92,22 +92,22 @@ SurfaceH264Capture& SurfaceCapture()
 
 bool StartScreenCapture(const CaptureOptions& options, std::string& message, void*)
 {
+    std::string surfaceMessage;
+    if (SurfaceCapture().Start(options, surfaceMessage)) {
+        message = surfaceMessage + " mode=surface-h264";
+        EmitCaptureInfo("xrdp surface H264 capture selected: " + message);
+        return true;
+    }
+
+    EmitCaptureError("xrdp surface H264 capture unavailable, falling back to raw path: " +
+        surfaceMessage);
     std::string rawMessage;
     if (RawCapture().Start(options, rawMessage)) {
         message = rawMessage + " mode=raw-fullrange-avc420";
-        EmitCaptureInfo("xrdp raw/full-range capture selected before surface H264: " + message);
         return true;
     }
 
-    EmitCaptureError("xrdp raw capture unavailable, falling back to surface H264 path: " +
-        rawMessage);
-    std::string surfaceMessage;
-    if (SurfaceCapture().Start(options, surfaceMessage)) {
-        message = surfaceMessage;
-        return true;
-    }
-
-    message = rawMessage + "; surface fallback failed: " + surfaceMessage;
+    message = surfaceMessage + "; raw fallback failed: " + rawMessage;
     return false;
 }
 
@@ -144,6 +144,17 @@ std::string DescribeDisplayGeometry(void*)
     return description;
 }
 
+uint32_t QueryDisplayRefreshRate(void*)
+{
+    xrdp_ohos_display_geometry geometry {};
+    geometry.size = sizeof(geometry);
+    if (xrdp_ohos_query_display_geometry(&geometry) != XRDP_OHOS_BACKEND_STATUS_OK ||
+        geometry.valid == 0 || geometry.refresh_rate_valid == 0) {
+        return 0;
+    }
+    return geometry.refresh_rate;
+}
+
 CaptureController& Controller()
 {
     static CaptureController controller({
@@ -153,6 +164,7 @@ CaptureController& Controller()
         nullptr,
         nullptr,
         DescribeDisplayGeometry,
+        QueryDisplayRefreshRate,
         nullptr,
     });
     return controller;

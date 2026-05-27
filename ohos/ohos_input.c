@@ -653,7 +653,7 @@ ohos_input_handle_event(struct ohos_input_context *ctx,
     if (event->msg == XRDP_OHOS_WM_KEYDOWN ||
         event->msg == XRDP_OHOS_WM_KEYUP)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.input: stage=input_recv trace=%llu seq=%llu kind=key msg=%d flags=%ld keysym=%ld scancode=%ld extra=%ld connected=%d desktop=%dx%d",
             (unsigned long long)trace_id,
             (unsigned long long)event_seq, event->msg, event->param1,
@@ -675,7 +675,7 @@ ohos_input_handle_event(struct ohos_input_context *ctx,
         if (event->msg == XRDP_OHOS_WM_KEYUP &&
             !ohos_input_is_key_tracked(ctx, key_code))
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: stage=ignore trace=%llu seq=%llu kind=key reason=untracked_key_up key_code=%d flags=%ld keysym=%ld scancode=%ld extra=%ld pressed_keys=%d pressed_buttons=0x%8.8x",
                 (unsigned long long)trace_id,
                 (unsigned long long)event_seq,

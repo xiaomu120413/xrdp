@@ -60,6 +60,8 @@ libxrdpohos_la_SOURCES = \
   ohos_capture_h264.h \
   ohos_capture_h264_encoder.cpp \
   ohos_capture_h264_encoder.h \
+  ohos_capture_h264_gles.cpp \
+  ohos_capture_h264_gles.h \
   ohos_capture_raw.cpp \
   ohos_capture_raw.h \
   ohos_capture_types.h \

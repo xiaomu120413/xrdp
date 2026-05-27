@@ -5,6 +5,18 @@
 #include <thread>
 
 namespace xrdp_ohos {
+namespace {
+
+uint32_t ResolveCaptureFrameRate(uint32_t displayRefreshRate)
+{
+    if (displayRefreshRate == 0) {
+        return kDefaultCaptureFrameRate;
+    }
+    return displayRefreshRate > kMaxCaptureFrameRate ? kMaxCaptureFrameRate :
+        displayRefreshRate;
+}
+
+} // namespace
 
 CaptureController::CaptureController(CaptureControllerCallbacks callbacks)
     : callbacks_(callbacks)
@@ -66,7 +78,9 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height)
     CaptureOptions options {};
     options.width = width;
     options.height = height;
-    options.frameRate = kDefaultCaptureFrameRate;
+    const uint32_t displayRefreshRate = callbacks_.queryDisplayRefreshRate != nullptr ?
+        callbacks_.queryDisplayRefreshRate(callbacks_.userData) : 0;
+    options.frameRate = ResolveCaptureFrameRate(displayRefreshRate);
     options.showCursor = false;
     bool restartCapture = false;
 
@@ -93,6 +107,9 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height)
     }
     EmitCaptureInfo("xrdp active mstsc session detected; scheduling screen capture desktop=" +
         std::to_string(width) + "x" + std::to_string(height) + geometry +
+        " fps=" + std::to_string(options.frameRate) +
+        " fpsSource=" + (displayRefreshRate == 0 ? std::string("default") :
+            std::string("display-refresh")) +
         " inputMapping=desktop-aspect-to-display" +
         (restartCapture ? " restartCapture=1" : " restartCapture=0"));
 

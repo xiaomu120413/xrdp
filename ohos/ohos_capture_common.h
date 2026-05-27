@@ -11,7 +11,8 @@
 namespace xrdp_ohos {
 
 constexpr uint32_t kMaxCaptureDimension = 8192;
-constexpr uint32_t kDefaultCaptureFrameRate = 15;
+constexpr uint32_t kMaxCaptureFrameRate = 60;
+constexpr uint32_t kDefaultCaptureFrameRate = 60;
 
 uint64_t NowUs();
 void EmitCaptureDebug(const std::string& line);

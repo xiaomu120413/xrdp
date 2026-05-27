@@ -78,7 +78,7 @@ CaptureOptions NormalizeCaptureOptions(CaptureOptions options)
     if (options.height == 0 || options.height > kMaxCaptureDimension) {
         options.height = 1440;
     }
-    if (options.frameRate == 0 || options.frameRate > 60) {
+    if (options.frameRate == 0 || options.frameRate > kMaxCaptureFrameRate) {
         options.frameRate = kDefaultCaptureFrameRate;
     }
     return options;

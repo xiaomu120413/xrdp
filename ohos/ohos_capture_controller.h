@@ -18,6 +18,7 @@ using CaptureControllerStopFn = void (*)(const std::string& reason, void* userDa
 using CaptureControllerUpdateTargetFn = void (*)(uint32_t width, uint32_t height, void* userData);
 using CaptureControllerInputFn = void (*)(const std::string& reason, void* userData);
 using CaptureControllerGeometryFn = std::string (*)(void* userData);
+using CaptureControllerRefreshRateFn = uint32_t (*)(void* userData);
 
 struct CaptureControllerCallbacks {
     CaptureControllerStartFn startCapture = nullptr;
@@ -26,6 +27,7 @@ struct CaptureControllerCallbacks {
     CaptureControllerInputFn primeInputAuthorization = nullptr;
     CaptureControllerInputFn resetInput = nullptr;
     CaptureControllerGeometryFn describeGeometry = nullptr;
+    CaptureControllerRefreshRateFn queryDisplayRefreshRate = nullptr;
     void* userData = nullptr;
 };
 

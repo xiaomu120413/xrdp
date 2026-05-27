@@ -95,9 +95,7 @@ ohos_access_authorized(struct ohos_mod *self)
 static int
 ohos_mod_should_log_native_result(int msg)
 {
-    return msg == WM_KEYDOWN ||
-           msg == WM_KEYUP ||
-           (msg >= WM_LBUTTONUP && msg <= WM_BUTTON9DOWN);
+    return msg >= WM_LBUTTONUP && msg <= WM_BUTTON9DOWN;
 }
 
 static void
@@ -319,7 +317,7 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         case WM_KEYDOWN:
         case WM_KEYUP:
             self->key_event_count++;
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: stage=module_recv trace=%llu key=%s flags=%ld code=%ld extra=(%ld,%ld) desktop=%dx%d connected=%d",
                 (unsigned long long)trace_id,
                 msg == WM_KEYDOWN ? "down" : "up",
