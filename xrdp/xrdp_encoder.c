@@ -970,10 +970,10 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
     in_uint16_le(in_s, height);
     twidth = width;
     theight = height;
-    dst_rect.x1 = 0;
-    dst_rect.y1 = 0;
-    dst_rect.x2 = width;
-    dst_rect.y2 = height;
+    dst_rect.x1 = left;
+    dst_rect.y1 = top;
+    dst_rect.x2 = left + width;
+    dst_rect.y2 = top + height;
     LOG_DEVEL(LOG_LEVEL_INFO, "gfx_wiretosurface1: left %d top "
               "%d width %d height %d mon_index %d",
               left, top, width, height, mon_index);

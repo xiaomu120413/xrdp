@@ -39,7 +39,8 @@ public:
     void Reset(const std::string& reason);
 
 private:
-    void StartForClient(uint32_t width, uint32_t height);
+    void StartForClient(uint32_t width, uint32_t height, uint32_t desktopWidth,
+        uint32_t desktopHeight, uint32_t contentLeft, uint32_t contentTop);
     void StopForClient(const std::string& reason);
     void ResetState(const std::string& reason);
     void PrimeInputAuthorization(const std::string& reason);

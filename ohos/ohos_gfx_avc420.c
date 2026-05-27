@@ -184,7 +184,8 @@ ohos_put_rect_wh(char **p, int left, int top, int width, int height)
 }
 
 static char *
-ohos_build_avc420_commands_ex(int width, int height, int frame_id,
+ohos_build_avc420_commands_ex(int dst_left, int dst_top, int width,
+                              int height, int frame_id,
                               int already_compressed, int *bytes)
 {
     const int start_bytes = 16;
@@ -211,22 +212,16 @@ ohos_build_avc420_commands_ex(int width, int height, int frame_id,
     ohos_put_u8(&p, XR_PIXEL_FORMAT_XRGB_8888);
     ohos_put_u32(&p, already_compressed ? 1U : 0U);
     ohos_put_u16(&p, 1);
-    ohos_put_rect_wh(&p, 0, 0, width, height);
+    ohos_put_rect_wh(&p, dst_left, dst_top, width, height);
     ohos_put_u16(&p, 1);
     ohos_put_rect_wh(&p, 0, 0, width, height);
-    ohos_put_rect_wh(&p, 0, 0, width, height);
+    ohos_put_rect_wh(&p, dst_left, dst_top, width, height);
 
     ohos_put_gfx_header(&p, XR_RDPGFX_CMDID_ENDFRAME, end_bytes);
     ohos_put_u32(&p, (unsigned int)frame_id);
 
     *bytes = total;
     return cmd;
-}
-
-static char *
-ohos_build_avc420_commands(int width, int height, int frame_id, int *bytes)
-{
-    return ohos_build_avc420_commands_ex(width, height, frame_id, 0, bytes);
 }
 
 static int
@@ -275,6 +270,8 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
                                 int frame_width,
                                 int frame_height,
                                 int stride,
+                                int dst_left,
+                                int dst_top,
                                 int paint_width,
                                 int paint_height,
                                 int frame_id,
@@ -308,6 +305,7 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
             paint_width <= 0 || paint_height <= 0 ||
             frame_width < paint_width || frame_height < paint_height ||
             stride < frame_width ||
+            dst_left < 0 || dst_top < 0 ||
             (paint_width & 1) != 0 || (paint_height & 1) != 0)
     {
         return 1;
@@ -349,8 +347,9 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
         }
     }
 
-    cmd = ohos_build_avc420_commands(paint_width, paint_height,
-                                     frame_id, &cmd_bytes);
+    cmd = ohos_build_avc420_commands_ex(dst_left, dst_top, paint_width,
+                                        paint_height, frame_id, 0,
+                                        &cmd_bytes);
     if (cmd == 0)
     {
         munmap(mapped, data_bytes);
@@ -399,6 +398,8 @@ int
 ohos_gfx_send_avc420_h264_frame(struct mod *mod,
                                 const char *h264,
                                 int h264_bytes,
+                                int dst_left,
+                                int dst_top,
                                 int paint_width,
                                 int paint_height,
                                 int frame_id,
@@ -428,6 +429,7 @@ ohos_gfx_send_avc420_h264_frame(struct mod *mod,
 
     if (mod == 0 || mod->server_egfx_cmd == 0 || h264 == 0 ||
             h264_bytes <= 0 || paint_width <= 0 || paint_height <= 0 ||
+            dst_left < 0 || dst_top < 0 ||
             (paint_width & 1) != 0 || (paint_height & 1) != 0)
     {
         return 1;
@@ -455,8 +457,9 @@ ohos_gfx_send_avc420_h264_frame(struct mod *mod,
         }
     }
 
-    cmd = ohos_build_avc420_commands_ex(paint_width, paint_height,
-                                        frame_id, 1, &cmd_bytes);
+    cmd = ohos_build_avc420_commands_ex(dst_left, dst_top, paint_width,
+                                        paint_height, frame_id, 1,
+                                        &cmd_bytes);
     if (cmd == 0)
     {
         munmap(mapped, (size_t)h264_bytes);
@@ -496,6 +499,8 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
                            const char *bgra,
                            int frame_width,
                            int frame_height,
+                           int dst_left,
+                           int dst_top,
                            int paint_width,
                            int paint_height,
                            int frame_id,
@@ -528,6 +533,7 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
     if (mod == 0 || mod->server_egfx_cmd == 0 || bgra == 0 ||
             paint_width <= 0 || paint_height <= 0 ||
             frame_width < paint_width || frame_height < paint_height ||
+            dst_left < 0 || dst_top < 0 ||
             (paint_width & 1) != 0 || (paint_height & 1) != 0)
     {
         return 1;
@@ -569,8 +575,9 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
         }
     }
 
-    cmd = ohos_build_avc420_commands(paint_width, paint_height,
-                                     frame_id, &cmd_bytes);
+    cmd = ohos_build_avc420_commands_ex(dst_left, dst_top, paint_width,
+                                        paint_height, frame_id, 0,
+                                        &cmd_bytes);
     if (cmd == 0)
     {
         munmap(mapped, data_bytes);

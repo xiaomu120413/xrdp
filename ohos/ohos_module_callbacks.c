@@ -135,22 +135,26 @@ ohos_mod_request_client_desktop_size(struct ohos_mod *self,
         LOG(LOG_LEVEL_WARNING,
             "xrdp.ohos.resize: cannot request client desktop reason=%s target=%dx%d missing_client_monitor_resize=1",
             reason == 0 ? "" : reason,
-            self->desktop_size.target_width,
-            self->desktop_size.target_height);
+            self->desktop_size.desktop_width,
+            self->desktop_size.desktop_height);
         return 1;
     }
 
-    ohos_init_single_monitor(self->desktop_size.target_width,
-                             self->desktop_size.target_height, &monitor);
+    ohos_init_single_monitor(self->desktop_size.desktop_width,
+                             self->desktop_size.desktop_height, &monitor);
     rv = self->mod.client_monitor_resize(&self->mod,
-                                         self->desktop_size.target_width,
-                                         self->desktop_size.target_height,
+                                         self->desktop_size.desktop_width,
+                                         self->desktop_size.desktop_height,
                                          1, &monitor);
     LOG(rv == 0 ? LOG_LEVEL_INFO : LOG_LEVEL_WARNING,
-        "xrdp.ohos.resize: request client desktop reason=%s requested=%dx%d target=%dx%d display=%dx%d rv=%d",
+        "xrdp.ohos.resize: request client desktop reason=%s requested=%dx%d desktop=%dx%d content=(%d,%d %dx%d) display=%dx%d rv=%d",
         reason == 0 ? "" : reason,
         self->desktop_size.requested_width,
         self->desktop_size.requested_height,
+        self->desktop_size.desktop_width,
+        self->desktop_size.desktop_height,
+        self->desktop_size.target_left,
+        self->desktop_size.target_top,
         self->desktop_size.target_width,
         self->desktop_size.target_height,
         self->desktop_size.display_width,
@@ -182,6 +186,10 @@ ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
     {
         desktop.requested_width = requested_width;
         desktop.requested_height = requested_height;
+        desktop.desktop_width = requested_width;
+        desktop.desktop_height = requested_height;
+        desktop.target_left = 0;
+        desktop.target_top = 0;
         desktop.target_width = requested_width;
         desktop.target_height = requested_height;
         desktop.max_width = self->max_desktop_width;
@@ -190,28 +198,32 @@ ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
         desktop.display_height = 0;
         desktop.normalized = 0;
         desktop.limited_by_max = 0;
+        desktop.limited_by_aspect = 0;
         desktop.valid_display = 0;
     }
 
     self->requested_width = requested_width;
     self->requested_height = requested_height;
     self->desktop_size = desktop;
-    self->width = desktop.target_width;
-    self->height = desktop.target_height;
+    self->width = desktop.desktop_width;
+    self->height = desktop.desktop_height;
 
     if (old_width != self->width || old_height != self->height ||
-            desktop.normalized)
+            desktop.normalized || desktop.limited_by_aspect)
     {
         LOG(LOG_LEVEL_INFO,
-            "xrdp.ohos.resize: desktop reason=%s requested=%dx%d target=%dx%d old=%dx%d display=%dx%d max=%dx%d display_valid=%d normalized=%d limited_by_max=%d connected=%d",
+            "xrdp.ohos.resize: desktop reason=%s requested=%dx%d desktop=%dx%d content=(%d,%d %dx%d) old=%dx%d display=%dx%d max=%dx%d display_valid=%d normalized=%d limited_by_max=%d limited_by_aspect=%d connected=%d",
             reason == 0 ? "" : reason,
             desktop.requested_width, desktop.requested_height,
+            desktop.desktop_width, desktop.desktop_height,
+            desktop.target_left, desktop.target_top,
             desktop.target_width, desktop.target_height,
             old_width, old_height,
             desktop.display_width, desktop.display_height,
             desktop.max_width, desktop.max_height,
             desktop.valid_display, desktop.normalized,
-            desktop.limited_by_max, self->connected);
+            desktop.limited_by_max, desktop.limited_by_aspect,
+            self->connected);
     }
 
     if (request_client_resize && desktop.normalized)
@@ -219,30 +231,40 @@ ohos_mod_update_desktop_size(struct ohos_mod *self, int requested_width,
         resize_rv = ohos_mod_request_client_desktop_size(self, reason);
         if (resize_rv != 0)
         {
-            if (desktop.limited_by_max)
-            {
-                LOG(LOG_LEVEL_WARNING,
-                    "xrdp.ohos.resize: client resize request failed but keeping capped desktop reason=%s requested=%dx%d target=%dx%d max=%dx%d rv=%d",
-                    reason == 0 ? "" : reason,
-                    requested_width, requested_height,
-                    self->width, self->height,
-                    desktop.max_width, desktop.max_height, resize_rv);
-            }
-            else
-            {
-                self->desktop_size.target_width = requested_width;
-                self->desktop_size.target_height = requested_height;
-                self->desktop_size.normalized = 0;
-                self->width = requested_width;
-                self->height = requested_height;
-                LOG(LOG_LEVEL_WARNING,
-                    "xrdp.ohos.resize: fallback to requested desktop reason=%s desktop=%dx%d",
-                    reason == 0 ? "" : reason, self->width, self->height);
-            }
+            LOG(LOG_LEVEL_WARNING,
+                "xrdp.ohos.resize: client resize request failed; keeping selected desktop reason=%s requested=%dx%d desktop=%dx%d content=(%d,%d %dx%d) max=%dx%d limited_by_max=%d limited_by_aspect=%d rv=%d",
+                reason == 0 ? "" : reason,
+                requested_width, requested_height,
+                self->width, self->height,
+                desktop.target_left, desktop.target_top,
+                desktop.target_width, desktop.target_height,
+                desktop.max_width, desktop.max_height,
+                desktop.limited_by_max, desktop.limited_by_aspect,
+                resize_rv);
         }
     }
 
     return resize_rv;
+}
+
+static void
+ohos_forward_desktop_event(struct ohos_mod *self, int type)
+{
+    int left;
+    int top;
+    int right;
+    int bottom;
+
+    if (self == 0)
+    {
+        return;
+    }
+
+    left = self->desktop_size.target_left;
+    top = self->desktop_size.target_top;
+    right = left + self->desktop_size.target_width;
+    bottom = top + self->desktop_size.target_height;
+    ohos_forward_backend_event(self, type, 0, left, top, right, bottom, 0, 0);
 }
 
 static int
@@ -292,8 +314,7 @@ ohos_mod_connect(struct mod *mod, int fd)
     ohos_input_prime_authorization("session connect");
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
-    ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT,
-                               0, 0, 0, 0, 0, 0, 0);
+    ohos_forward_desktop_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT);
     ohos_forward_input_event(self, XRDP_OHOS_INPUT_SESSION_CONNECT, 0, 0, 0, 0);
     rv = ohos_draw_external_frame(self, &painted);
     if (painted)
@@ -658,8 +679,7 @@ ohos_mod_server_monitor_resize(struct mod *mod,
     LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.resize: client resize requested=%dx%d active=%dx%d",
         width, height, self->width, self->height);
-    ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_MONITOR_RESIZE,
-                               0, 0, 0, width, height, 0, 0);
+    ohos_forward_desktop_event(self, XRDP_OHOS_BACKEND_EVENT_MONITOR_RESIZE);
     return ohos_clear_frame(self, "resize waiting for external frame");
 }
 
@@ -675,8 +695,8 @@ ohos_mod_server_monitor_full_invalidate(struct mod *mod,
     LOG(LOG_LEVEL_INFO,
         "xrdp.ohos.resize: full invalidate requested=%dx%d active=%dx%d",
         width, height, self->width, self->height);
-    ohos_forward_backend_event(self, XRDP_OHOS_BACKEND_EVENT_MONITOR_FULL_INVALIDATE,
-                               0, 0, 0, width, height, 0, 0);
+    ohos_forward_desktop_event(self,
+                               XRDP_OHOS_BACKEND_EVENT_MONITOR_FULL_INVALIDATE);
     return ohos_clear_frame(self, "full invalidate waiting for external frame");
 }
 

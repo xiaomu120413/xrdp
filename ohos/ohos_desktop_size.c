@@ -63,6 +63,10 @@ ohos_select_desktop_size(int requested_width, int requested_height,
 
     desktop->requested_width = requested_width;
     desktop->requested_height = requested_height;
+    desktop->desktop_width = requested_width;
+    desktop->desktop_height = requested_height;
+    desktop->target_left = 0;
+    desktop->target_top = 0;
     desktop->target_width = requested_width;
     desktop->target_height = requested_height;
     desktop->max_width = ohos_sanitize_max_dimension(max_width);
@@ -71,6 +75,7 @@ ohos_select_desktop_size(int requested_width, int requested_height,
     desktop->display_height = 0;
     desktop->normalized = 0;
     desktop->limited_by_max = 0;
+    desktop->limited_by_aspect = 0;
     desktop->valid_display = 0;
 
     if (requested_width <= 0 || requested_height <= 0)
@@ -110,6 +115,8 @@ ohos_select_desktop_size(int requested_width, int requested_height,
         effective_height = desktop->max_height;
         desktop->limited_by_max = 1;
     }
+    desktop->desktop_width = effective_width;
+    desktop->desktop_height = effective_height;
 
     scale_width = effective_width / ratio_width;
     scale_height = effective_height / ratio_height;
@@ -127,10 +134,12 @@ ohos_select_desktop_size(int requested_width, int requested_height,
 
     target_width = ratio_width * scale;
     target_height = ratio_height * scale;
+    desktop->target_left = (effective_width - target_width) / 2;
+    desktop->target_top = (effective_height - target_height) / 2;
     desktop->target_width = target_width;
     desktop->target_height = target_height;
-    desktop->normalized = desktop->limited_by_max ||
-                          target_width != requested_width ||
-                          target_height != requested_height;
+    desktop->limited_by_aspect = target_width != effective_width ||
+                                 target_height != effective_height;
+    desktop->normalized = desktop->limited_by_max;
     return 0;
 }

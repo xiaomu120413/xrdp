@@ -16,6 +16,21 @@ uint32_t ResolveCaptureFrameRate(uint32_t displayRefreshRate)
         displayRefreshRate;
 }
 
+void ResolveContentRect(const xrdp_ohos_backend_event& event,
+    uint32_t& width, uint32_t& height, uint32_t& left, uint32_t& top)
+{
+    width = event.width > 0 ? static_cast<uint32_t>(event.width) : 0;
+    height = event.height > 0 ? static_cast<uint32_t>(event.height) : 0;
+    left = 0;
+    top = 0;
+    if (event.right > event.left && event.bottom > event.top) {
+        left = event.left > 0 ? static_cast<uint32_t>(event.left) : 0;
+        top = event.top > 0 ? static_cast<uint32_t>(event.top) : 0;
+        width = static_cast<uint32_t>(event.right - event.left);
+        height = static_cast<uint32_t>(event.bottom - event.top);
+    }
+}
+
 } // namespace
 
 CaptureController::CaptureController(CaptureControllerCallbacks callbacks)
@@ -25,16 +40,23 @@ CaptureController::CaptureController(CaptureControllerCallbacks callbacks)
 
 void CaptureController::HandleBackendEvent(const xrdp_ohos_backend_event& event)
 {
-    if (event.width > 0 && event.height > 0 && callbacks_.updateTarget != nullptr) {
-        callbacks_.updateTarget(static_cast<uint32_t>(event.width),
-            static_cast<uint32_t>(event.height), callbacks_.userData);
-    }
+    uint32_t contentWidth = 0;
+    uint32_t contentHeight = 0;
+    uint32_t contentLeft = 0;
+    uint32_t contentTop = 0;
 
+    ResolveContentRect(event, contentWidth, contentHeight, contentLeft, contentTop);
     switch (event.type) {
         case XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT:
-            if (event.width > 0 && event.height > 0) {
-                StartForClient(static_cast<uint32_t>(event.width),
-                    static_cast<uint32_t>(event.height));
+            if (event.width > 0 && event.height > 0 &&
+                contentWidth > 0 && contentHeight > 0) {
+                if (callbacks_.updateTarget != nullptr) {
+                    callbacks_.updateTarget(contentWidth, contentHeight,
+                        callbacks_.userData);
+                }
+                StartForClient(contentWidth, contentHeight,
+                    static_cast<uint32_t>(event.width),
+                    static_cast<uint32_t>(event.height), contentLeft, contentTop);
             }
             PrimeInputAuthorization("xrdp client connected");
             break;
@@ -44,17 +66,29 @@ void CaptureController::HandleBackendEvent(const xrdp_ohos_backend_event& event)
             break;
         case XRDP_OHOS_BACKEND_EVENT_MONITOR_RESIZE:
         case XRDP_OHOS_BACKEND_EVENT_MONITOR_FULL_INVALIDATE:
-            if (event.connected != 0 && event.width > 0 && event.height > 0) {
-                StartForClient(static_cast<uint32_t>(event.width),
-                    static_cast<uint32_t>(event.height));
+            if (event.connected != 0 && event.width > 0 && event.height > 0 &&
+                contentWidth > 0 && contentHeight > 0) {
+                if (callbacks_.updateTarget != nullptr) {
+                    callbacks_.updateTarget(contentWidth, contentHeight,
+                        callbacks_.userData);
+                }
+                StartForClient(contentWidth, contentHeight,
+                    static_cast<uint32_t>(event.width),
+                    static_cast<uint32_t>(event.height), contentLeft, contentTop);
             }
             break;
         case XRDP_OHOS_BACKEND_EVENT_SUPPRESS_OUTPUT:
             if (event.suppress != 0) {
                 EmitCaptureInfo("xrdp output suppressed by client; keep capture running to avoid stale MSTSC video");
-            } else if (event.connected != 0 && event.width > 0 && event.height > 0) {
-                StartForClient(static_cast<uint32_t>(event.width),
-                    static_cast<uint32_t>(event.height));
+            } else if (event.connected != 0 && event.width > 0 && event.height > 0 &&
+                contentWidth > 0 && contentHeight > 0) {
+                if (callbacks_.updateTarget != nullptr) {
+                    callbacks_.updateTarget(contentWidth, contentHeight,
+                        callbacks_.userData);
+                }
+                StartForClient(contentWidth, contentHeight,
+                    static_cast<uint32_t>(event.width),
+                    static_cast<uint32_t>(event.height), contentLeft, contentTop);
             }
             break;
         default:
@@ -68,7 +102,9 @@ void CaptureController::Reset(const std::string& reason)
     ResetState(reason);
 }
 
-void CaptureController::StartForClient(uint32_t width, uint32_t height)
+void CaptureController::StartForClient(uint32_t width, uint32_t height,
+    uint32_t desktopWidth, uint32_t desktopHeight, uint32_t contentLeft,
+    uint32_t contentTop)
 {
     if (width == 0 || height == 0 || width > kMaxCaptureDimension || height > kMaxCaptureDimension ||
         callbacks_.startCapture == nullptr) {
@@ -106,7 +142,10 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height)
         geometry = " " + geometry;
     }
     EmitCaptureInfo("xrdp active mstsc session detected; scheduling screen capture desktop=" +
-        std::to_string(width) + "x" + std::to_string(height) + geometry +
+        std::to_string(desktopWidth) + "x" + std::to_string(desktopHeight) +
+        " content=(" + std::to_string(contentLeft) + "," +
+        std::to_string(contentTop) + " " + std::to_string(width) + "x" +
+        std::to_string(height) + ")" + geometry +
         " fps=" + std::to_string(options.frameRate) +
         " fpsSource=" + (displayRefreshRate == 0 ? std::string("default") :
             std::string("display-refresh")) +

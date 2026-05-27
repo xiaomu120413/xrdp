@@ -7,6 +7,10 @@ struct ohos_desktop_size
 {
     int requested_width;
     int requested_height;
+    int desktop_width;
+    int desktop_height;
+    int target_left;
+    int target_top;
     int target_width;
     int target_height;
     int max_width;
@@ -15,6 +19,7 @@ struct ohos_desktop_size
     int display_height;
     int normalized;
     int limited_by_max;
+    int limited_by_aspect;
     int valid_display;
 };
 
