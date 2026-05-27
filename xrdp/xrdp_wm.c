@@ -677,19 +677,10 @@ xrdp_wm_init(struct xrdp_wm *self)
     {
         if (do_autologin)
         {
-            if (self->session->client_info->password[0] == '\0')
-            {
-                do_autologin = 0;
-                LOG(LOG_LEVEL_INFO,
-                    "xrdp.ohos.auth: autorun section \"%s\" waiting for access code",
-                    autorun_name);
-            }
-            else
-            {
-                LOG(LOG_LEVEL_INFO,
-                    "xrdp.ohos.auth: autorun section \"%s\" using client access code",
-                    autorun_name);
-            }
+            do_autologin = 0;
+            LOG(LOG_LEVEL_INFO,
+                "xrdp.ohos.auth: autorun section \"%s\" ignoring client autologon; prompting for access code",
+                autorun_name);
         }
         else
         {
