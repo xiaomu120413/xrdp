@@ -220,7 +220,7 @@ set_h264_encoder_methods(struct xrdp_encoder *self)
     // couldn't load it.
     if (encoder_name != NULL && self->mm->libh264_loaded)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: using %s for "
+        LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: using %s for "
             "H.264 encoder", encoder_name);
     }
 }
@@ -260,7 +260,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
     self->process_enc = process_enc_egfx;
     if (client_info->jpeg_codec_id != 0)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: starting jpeg codec session");
+        LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: starting jpeg codec session");
         self->codec_id = client_info->jpeg_codec_id;
         self->in_codec_mode = 1;
         self->codec_quality = client_info->jpeg_prop[0];
@@ -272,7 +272,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
         defined(XRDP_OHOS_AVCODEC)
     else if (mm->libh264_loaded && (mm->egfx_flags & XRDP_EGFX_H264) != 0)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp_encoder_create: starting h264 codec session gfx");
         self->in_codec_mode = 1;
         client_info->capture_code = CC_GFX_A2;
@@ -281,7 +281,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
     }
     else if (mm->libh264_loaded && client_info->h264_codec_id != 0)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: starting h264 codec session");
+        LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: starting h264 codec session");
         self->codec_id = client_info->h264_codec_id;
         self->in_codec_mode = 1;
         client_info->capture_code = CC_SUF_A2;
@@ -292,7 +292,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
 #ifdef XRDP_RFXCODEC
     else if (mm->egfx_flags & XRDP_EGFX_RFX_PRO)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp_encoder_create: starting gfx rfx pro codec session");
         self->in_codec_mode = 1;
         client_info->capture_code = CC_GFX_PRO;
@@ -322,7 +322,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
     }
     else if (client_info->rfx_codec_id != 0)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: starting rfx codec session");
+        LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: starting rfx codec session");
         self->codec_id = client_info->rfx_codec_id;
         self->in_codec_mode = 1;
         client_info->capture_code = CC_SUF_RFX;
@@ -367,12 +367,12 @@ xrdp_encoder_create(struct xrdp_mm *mm)
                     fif <= MAX_XRDP_GFX_FRAMES_IN_FLIGHT)
             {
                 self->frames_in_flight = fif;
-                LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: "
+                LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: "
                     "XRDP_GFX_FRAMES_IN_FLIGHT set to %d", fif);
             }
             else
             {
-                LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: "
+                LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: "
                     "XRDP_GFX_FRAMES_IN_FLIGHT set but invalid %s",
                     env_var);
             }
@@ -386,12 +386,12 @@ xrdp_encoder_create(struct xrdp_mm *mm)
                     mcb <= MAX_XRDP_GFX_MAX_COMPRESSED_BYTES)
             {
                 self->max_compressed_bytes = mcb;
-                LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: "
+                LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: "
                     "XRDP_GFX_MAX_COMPRESSED_BYTES set to %d", mcb);
             }
             else
             {
-                LOG(LOG_LEVEL_INFO, "xrdp_encoder_create: "
+                LOG(LOG_LEVEL_DEBUG, "xrdp_encoder_create: "
                     "XRDP_GFX_MAX_COMPRESSED_BYTES set but invalid %s",
                     env_var);
             }
@@ -984,7 +984,7 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
         g_free(c_rects);
         g_free(d_rects);
         g_free(crects);
-        LOG(LOG_LEVEL_INFO, "10");
+        LOG(LOG_LEVEL_DEBUG, "10");
         return NULL;
     }
 
@@ -1033,7 +1033,7 @@ gfx_wiretosurface1(struct xrdp_encoder *self,
             log_count++;
             if (log_count <= 5 || (log_count % 60) == 0)
             {
-                LOG(LOG_LEVEL_INFO,
+                LOG(LOG_LEVEL_DEBUG,
                     "xrdp.encoder.e2e: encode output frame=%d codec=AVC420/H264 size=%dx%d nv12=%d h264=%d encode=%.3fms count=%d",
                     frame_id, width, height, enc_gfx_cmd->data_bytes,
                     bitmap_data_length,

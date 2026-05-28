@@ -273,7 +273,7 @@ ohos_rdpsnd_process_formats(struct ohos_rdpsnd *rdpsnd, struct stream *s,
         in_uint8s(s, cb_size);
     }
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.rdpsnd: client formats=%d selected=%d index=%d lists=%u",
         num_formats, rdpsnd->format_selected, rdpsnd->client_format_index,
         rdpsnd->client_format_lists);
@@ -282,7 +282,7 @@ ohos_rdpsnd_process_formats(struct ohos_rdpsnd *rdpsnd, struct stream *s,
     {
         return ohos_rdpsnd_send_training(rdpsnd);
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.rdpsnd: client did not accept pcm=%dHz/%dch/%dbit",
         OHOS_RDPSND_SAMPLE_RATE, OHOS_RDPSND_CHANNELS,
         OHOS_RDPSND_BITS_PER_SAMPLE);
@@ -295,7 +295,7 @@ ohos_rdpsnd_process_training(struct ohos_rdpsnd *rdpsnd)
     unsigned int elapsed;
 
     elapsed = g_get_elapsed_ms() - rdpsnd->training_sent_time;
-    LOG(LOG_LEVEL_INFO, "xrdp.ohos.rdpsnd: training round_trip_ms=%u",
+    LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.rdpsnd: training round_trip_ms=%u",
         elapsed);
     return 0;
 }
@@ -351,7 +351,7 @@ ohos_rdpsnd_process_pdu(struct ohos_rdpsnd *rdpsnd, struct stream *s)
             return ohos_rdpsnd_process_wave_confirm(rdpsnd, s, size);
 
         case SNDC_CLOSE:
-            LOG(LOG_LEVEL_INFO, "xrdp.ohos.rdpsnd: client close");
+            LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.rdpsnd: client close");
             return 0;
 
         default:

@@ -232,7 +232,7 @@ ohos_cliprdr_write_single_remote_image_file(struct ohos_cliprdr *cliprdr)
     }
     rv = ohos_cliprdr_write_remote_image(cliprdr, file->image_kind,
                                          data, bytes);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote image file paste name=%s bytes=%d kind=%s rv=%d",
         file->name == 0 ? "" : file->name, bytes,
         ohos_cliprdr_request_kind_name(file->image_kind), rv);
@@ -500,7 +500,7 @@ ohos_cliprdr_process_remote_file_descriptor(struct ohos_cliprdr *cliprdr,
             ohos_cliprdr_remote_image_kind_from_name(
                 cliprdr->remote_files[index].name);
         cliprdr->remote_files[index].size = size_high == 0 ? size_low : -1;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: remote file descriptor index=%d name=%s size=%d size-high=%d image-kind=%s",
             index, cliprdr->remote_files[index].name == 0 ? "" :
             cliprdr->remote_files[index].name, size_low, size_high,

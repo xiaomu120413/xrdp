@@ -86,7 +86,7 @@ ohos_cliprdr_mark_remote_write_origin_locked(struct ohos_cliprdr *cliprdr,
     cliprdr->remote_write_generation = g_cliprdr_remote_write_generation;
     cliprdr->seen_remote_write_generation =
         g_cliprdr_remote_write_generation;
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote write origin generation=%u owner=%u until=%u",
         g_cliprdr_remote_write_generation, g_cliprdr_remote_write_owner,
         g_cliprdr_remote_write_until);
@@ -431,7 +431,7 @@ ohos_cliprdr_pasteboard_write_plain_text(struct ohos_cliprdr *cliprdr,
 
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, data);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData text record=plain bytes=%d status=%d(%s)",
         text == 0 ? 0 : (int)g_strlen(text),
         rc, ohos_cliprdr_pasteboard_status_name(rc));
@@ -530,7 +530,7 @@ ohos_cliprdr_on_pasteboard_changed(void *context, Pasteboard_NotifyType type)
     }
     ohos_cliprdr_unlock(cliprdr);
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard changed suppress=%d local=%d remote=%d generation=%u owner=%u self=%u",
         suppress, local_suppress, remote_suppress, remote_generation,
         remote_owner, cliprdr->instance_id);
@@ -584,7 +584,7 @@ ohos_cliprdr_pasteboard_init(struct ohos_cliprdr *cliprdr)
     if (rc == ERR_OK)
     {
         cliprdr->pasteboard_subscribed = 1;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cliprdr: Pasteboard observer subscribed");
     }
     else

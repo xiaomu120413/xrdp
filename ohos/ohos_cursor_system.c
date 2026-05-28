@@ -328,7 +328,7 @@ ohos_cursor_system_get_image(int style,
 
     cache->state = 1;
     *image = &cache->image;
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cursor: loaded system icon style=%d file=%s size=%dx%d hot=(%d,%d)",
         style, g_ohos_cursor_system_icons[index].file_name,
         cache->image.width, cache->image.height,

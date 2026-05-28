@@ -673,7 +673,7 @@ xrdp_egfx_reset_graphics(struct xrdp_egfx_bulk *bulk, int width, int height,
     int index;
     struct stream *s;
 
-    LOG(LOG_LEVEL_INFO, "xrdp_egfx_reset_graphics:");
+    LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_reset_graphics:");
     if (monitor_count > 16)
     {
         return NULL;
@@ -724,14 +724,14 @@ xrdp_egfx_reset_graphics(struct xrdp_egfx_bulk *bulk, int width, int height,
             out_uint32_le(s, mi[index].right);
             out_uint32_le(s, mi[index].bottom);
             out_uint32_le(s, mi[index].is_primary);
-            LOG(LOG_LEVEL_INFO, "xrdp_egfx_reset_graphics: (index %d) "
+            LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_reset_graphics: (index %d) "
                 "monitor left %d top %d right %d bottom %d is_primary %d",
                 index, mi[index].left, mi[index].top,
                 mi[index].right, mi[index].bottom,
                 mi[index].is_primary);
         }
     }
-    LOG(LOG_LEVEL_INFO, "xrdp_egfx_reset_graphics: width %d height %d "
+    LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_reset_graphics: width %d height %d "
         "monitorcount %d", width, height, monitor_count);
     if (monitor_count < 16)
     {
@@ -1053,7 +1053,7 @@ xrdp_egfx_create(struct xrdp_mm *mm, struct xrdp_egfx **egfx)
                                  "Microsoft::Windows::RDS::Graphics",
                                  1, /* WTS_CHANNEL_OPTION_DYNAMIC */
                                  &procs, &(self->channel_id));
-    LOG(LOG_LEVEL_INFO, "xrdp_egfx_create: error %d channel_id %d",
+    LOG(LOG_LEVEL_DEBUG, "xrdp_egfx_create: error %d channel_id %d",
         error, self->channel_id);
     self->session = process->session;
     self->surface_id = 0;

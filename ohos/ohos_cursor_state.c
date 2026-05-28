@@ -33,7 +33,7 @@ ohos_cursor_log_summary(struct ohos_mod *self, const char *reason)
     }
 
     cursor = &self->cursor;
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cursor: summary reason=%s queries=%llu updates=%llu image_updates=%llu defaulted=%llu errors=%llu visible_valid=%d visible=%d style_valid=%d style=%d sent_kind=%d sent_system_valid=%d sent_system=0x%4.4x sent_image_valid=%d sent_image=%dx%d hot=(%d,%d) has_pos=%d pos=(%d,%d)",
         reason == 0 ? "" : reason,
         (unsigned long long)cursor->query_count,

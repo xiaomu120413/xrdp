@@ -31,13 +31,13 @@ ohos_resolve_h264_flow_limit(void)
     if (parsed >= OHOS_H264_MIN_FLOW_LIMIT &&
             parsed <= OHOS_H264_MAX_FLOW_LIMIT)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.h264: XRDP_GFX_FRAMES_IN_FLIGHT set to %d",
             parsed);
         return parsed;
     }
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_WARNING,
         "xrdp.ohos.h264: XRDP_GFX_FRAMES_IN_FLIGHT invalid %s; using %d",
         value, OHOS_H264_DEFAULT_FLOW_LIMIT);
     return OHOS_H264_DEFAULT_FLOW_LIMIT;

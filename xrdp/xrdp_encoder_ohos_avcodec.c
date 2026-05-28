@@ -364,7 +364,7 @@ ohos_avcodec_store_codec_config(struct ohos_avcodec_encoder *oe,
     oe->codec_config = buffer;
     oe->codec_config_bytes = bytes;
     oe->codec_config_capacity = capacity;
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp_encoder_ohos_avcodec: stored H264 parameter sets bytes=%d",
         bytes);
     return 0;
@@ -608,7 +608,7 @@ ohos_avcodec_update_input_description(struct ohos_avcodec_encoder *oe,
     oe->input_stride = ohos_avcodec_max_int(oe->input_stride, oe->width);
     oe->input_slice_height =
         ohos_avcodec_max_int(oe->input_slice_height, oe->height);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp_encoder_ohos_avcodec: input description after %s stride=%d slice=%d pixelFormat=%d",
         reason == NULL ? "unknown" : reason,
         oe->input_stride, oe->input_slice_height, oe->input_pixel_format);
@@ -723,7 +723,7 @@ ohos_avcodec_configure_encoder(struct ohos_avcodec_global *og,
     max_bitrate = og->openh264_param[ct].MaxBitrate > 0 ?
                   og->openh264_param[ct].MaxBitrate : bitrate;
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp_encoder_ohos_avcodec: bitrate decision size=%dx%d connection=%s(%d->%d) configTarget=%d configMax=%d configMaxFps=%.3f selectedFps=%d candidate=%d capabilityRangeValid=%d capabilityRangeRc=%d capabilityMin=%d capabilityMax=%d final=%d maxBitrate=%d clamped=%d",
         width, height,
         ohos_avcodec_connection_type_name(connection_type),
@@ -850,7 +850,7 @@ ohos_avcodec_configure_encoder(struct ohos_avcodec_global *og,
     ohos_avcodec_update_output_description(oe, "start");
     ohos_avcodec_request_i_frame(oe);
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp_encoder_ohos_avcodec: hardware H264 encoder ready name=%s size=%dx%d fps=%d bitrate=%d pixelFormat=%d range=full color=bt709 transfer=bt709 matrix=bt709",
         oe->codec_name, width, height, frame_rate, bitrate, pixel_format);
     return 0;
@@ -1099,7 +1099,7 @@ xrdp_encoder_ohos_avcodec_create(void)
              NUM_CONNECTION_TYPES);
     for (index = 0; index < NUM_CONNECTION_TYPES; ++index)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp_encoder_ohos_avcodec: gfx OpenH264 config connection=%s(%d) frameSkip=%d target=%d max=%d maxFps=%.3f",
             ohos_avcodec_connection_type_name(index),
             index,
@@ -1240,7 +1240,7 @@ xrdp_encoder_ohos_avcodec_encode(void *handle, int session, int left, int top,
 
     if (ohos_avcodec_should_log(oe->output_frames))
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp_encoder_ohos_avcodec: encoded frame=%llu output=%llu bytes=%d size=%dx%d stride=%d slice=%d",
             (unsigned long long)oe->encode_calls,
             (unsigned long long)oe->output_frames,
@@ -1278,7 +1278,7 @@ xrdp_encoder_ohos_avcodec_install_ok(void)
         return 0;
     }
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp_encoder_ohos_avcodec: hardware H264 encoder available name=%s",
         codec_name);
     return 1;

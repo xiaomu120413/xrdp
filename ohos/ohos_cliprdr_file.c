@@ -163,7 +163,7 @@ ohos_cliprdr_has_local_file(struct ohos_cliprdr *cliprdr)
     int rv;
 
     rv = ohos_cliprdr_get_local_file(cliprdr, &file);
-    LOG(rv == 0 ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: local file probe ok=%d uri=%s path=%s size=%d",
         rv == 0, rv == 0 ? file.uri : "", rv == 0 ? file.path : "",
         rv == 0 ? file.size : 0);
@@ -230,7 +230,7 @@ ohos_cliprdr_send_local_file_descriptor(struct ohos_cliprdr *cliprdr)
     s_mark_end(s);
     rv = ohos_cliprdr_send_format_data_response(cliprdr, s->data,
                                                 (int)(s->end - s->data));
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: sent local FileGroupDescriptorW name=%s size=%d bytes=%d flags=0x%08x attrs=0x%08x rv=%d",
         file.name, file.size, (int)(s->end - s->data),
         CB_FD_ATTRIBUTES | CB_FD_FILESIZE, CB_FILE_ATTRIBUTE_NORMAL, rv);
@@ -299,7 +299,7 @@ ohos_cliprdr_send_local_file_size(struct ohos_cliprdr *cliprdr,
     out_uint32_le(s, 0);
     s_mark_end(s);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: sent local file size stream=%d lindex=%d size=%d rv=%d",
         stream_id, lindex, file.size, rv);
     free_stream(s);
@@ -374,7 +374,7 @@ ohos_cliprdr_send_local_file_range(struct ohos_cliprdr *cliprdr,
     s->p += bytes;
     s_mark_end(s);
     rv = ohos_cliprdr_send_stream(cliprdr, s);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: sent local file range stream=%d lindex=%d pos=%d requested=%d bytes=%d name=%s rv=%d",
         stream_id, lindex, position, requested, bytes, file.name, rv);
     free_stream(s);
@@ -412,7 +412,7 @@ ohos_cliprdr_process_local_filecontents_request(struct ohos_cliprdr *cliprdr,
         in_uint32_le(s, clip_data_id);
         have_clip_data_id = 1;
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: local filecontents request stream=%d lindex=%d flags=0x%08x pos=%d/%d requested=%d haveClipDataId=%d clipDataId=%d",
         stream_id, lindex, flags, position_high, position_low, requested,
         have_clip_data_id, clip_data_id);

@@ -466,7 +466,7 @@ xrdp_ohos_backend_set_encoded_frame_rate(uint32_t frame_rate)
     target->h264_render_min_interval_us = interval_us;
     ohos_unlock_frame_state();
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.h264: target frame rate set fps=%u interval_us=%llu",
         frame_rate, (unsigned long long)interval_us);
     return XRDP_OHOS_BACKEND_STATUS_OK;

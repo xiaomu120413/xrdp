@@ -56,7 +56,7 @@ static void
 ohos_input_authorize_callback(Input_InjectionStatus status)
 {
     atomic_store(&g_authorized_status, status);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.input: injection authorization callback status=%d",
         (int)status);
 }
@@ -126,7 +126,7 @@ ohos_input_ensure_authorized(const char *reason)
         {
             if (!is_hot_path)
             {
-                LOG(LOG_LEVEL_INFO,
+                LOG(LOG_LEVEL_DEBUG,
                     "xrdp.ohos.input: stage=auth_check result=authorized source=query reason=%s query_rc=%d status=%d requested=%d last_request_ms=%llu",
                     reason == 0 ? "" : reason, (int)query_rc, (int)status,
                     atomic_load(&g_authorization_requested),
@@ -163,7 +163,7 @@ ohos_input_ensure_authorized(const char *reason)
         atomic_store(&g_authorized_status, AUTHORIZED);
         if (!is_hot_path)
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: stage=auth_request result=authorized reason=%s request_rc=%d query_rc=%d status=%d requested=%d last_request_ms=%llu",
                 reason == 0 ? "" : reason, (int)request_rc,
                 (int)query_rc, (int)status,
@@ -177,7 +177,7 @@ ohos_input_ensure_authorized(const char *reason)
         uint32_t count = ++g_authorization_log_count;
         if (ohos_input_should_log_auth(count))
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: stage=auth_request result=pending reason=%s request_rc=%d query_rc=%d status=%d requested=%d last_request_ms=%llu now_ms=%llu",
                 reason == 0 ? "" : reason, (int)request_rc,
                 (int)query_rc, (int)status,
@@ -196,7 +196,7 @@ ohos_input_prime_authorization(const char *reason)
     int before_requested = atomic_load(&g_authorization_requested);
     int ready = ohos_input_ensure_authorized(reason);
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.input: stage=auth_prime reason=%s ready=%d status=%d->%d requested=%d->%d last_request_ms=%llu",
         reason == 0 ? "" : reason, ready,
         before_status, atomic_load(&g_authorized_status),

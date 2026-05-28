@@ -151,13 +151,13 @@ ohos_rdpsnd_connect(struct ohos_rdpsnd *rdpsnd)
     if (rdpsnd->mod->server_chansrv_in_use != 0 &&
             rdpsnd->mod->server_chansrv_in_use(rdpsnd->mod))
     {
-        LOG(LOG_LEVEL_INFO, "xrdp.ohos.rdpsnd: chansrv owns rdpsnd channel");
+        LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.rdpsnd: chansrv owns rdpsnd channel");
         return 0;
     }
     if (rdpsnd->mod->server_get_channel_id == 0 ||
             rdpsnd->mod->server_send_to_channel == 0)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp.ohos.rdpsnd: channel callbacks unavailable");
+        LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.rdpsnd: channel callbacks unavailable");
         return 0;
     }
 
@@ -166,7 +166,7 @@ ohos_rdpsnd_connect(struct ohos_rdpsnd *rdpsnd)
                                            RDPSND_SVC_CHANNEL_NAME);
     if (rdpsnd->channel_id < 0)
     {
-        LOG(LOG_LEVEL_INFO, "xrdp.ohos.rdpsnd: rdpsnd channel unavailable");
+        LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.rdpsnd: rdpsnd channel unavailable");
         return 0;
     }
 
@@ -174,7 +174,7 @@ ohos_rdpsnd_connect(struct ohos_rdpsnd *rdpsnd)
     if (rv == 0)
     {
         rdpsnd->channel_ready = 1;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.rdpsnd: channel ready id=%d pcm=%dHz/%dch/%dbit",
             rdpsnd->channel_id, OHOS_RDPSND_SAMPLE_RATE,
             OHOS_RDPSND_CHANNELS, OHOS_RDPSND_BITS_PER_SAMPLE);
@@ -281,9 +281,10 @@ ohos_rdpsnd_submit_audio(struct ohos_rdpsnd *rdpsnd,
 
     if (rdpsnd->submitted_buffers <= 3 ||
             (rdpsnd->submitted_buffers % 120) == 0 ||
-            dropped != dropped_before)
+            (dropped != dropped_before &&
+             (dropped <= 3 || (dropped % 120) == 0)))
     {
-        LOG(dropped != dropped_before ? LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
+        LOG(dropped != dropped_before ? LOG_LEVEL_WARNING : LOG_LEVEL_DEBUG,
             "xrdp.ohos.rdpsnd: audio queued bytes=%d queued_bytes=%d submitted=%u dropped=%d ts=%llu",
             frame->bytes, queued_bytes, rdpsnd->submitted_buffers, dropped,
             (unsigned long long)frame->source_timestamp);

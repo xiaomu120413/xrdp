@@ -185,7 +185,7 @@ ohos_input_refresh_geometry(struct ohos_input_context *ctx)
     {
         if (ohos_input_geometry_changed(&ctx->geometry, &geometry))
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: display id=%llu size=%dx%d origin=(%d,%d) vpr_valid=%u vpr=%.3f source_mode_valid=%u source_mode=%d",
                 (unsigned long long)geometry.display_id,
                 geometry.width, geometry.height,

@@ -249,7 +249,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     {
         return 1;
     }
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: remote image write start kind=%s(%d) bytes=%d",
         ohos_cliprdr_request_kind_name(request_kind), request_kind, bytes);
     if (request_kind == OHOS_CLIPRDR_REQUEST_DIB)
@@ -262,7 +262,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
                 ohos_cliprdr_create_pixelmap_from_bgra(bgra, width, height,
                                                        &pixelmap) == 0)
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.cliprdr: remote DIB parsed to PixelMap %ux%u bytes=%d",
                 width, height, bytes);
             owned_source = ohos_cliprdr_dib_to_bmp(data, bytes, &cache_bytes);
@@ -356,7 +356,7 @@ ohos_cliprdr_write_remote_image(struct ohos_cliprdr *cliprdr,
     }
     ohos_cliprdr_pasteboard_begin_remote_write(cliprdr);
     rc = OH_Pasteboard_SetData(cliprdr->pasteboard, udmf);
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.cliprdr: Pasteboard SetData image kind=%s source=%d(%s) record=pixelmap%s %ux%u bytes=%d uri=%s status=%d(%s)",
         ohos_cliprdr_request_kind_name(request_kind), source_format,
         ohos_cliprdr_format_display_name(source_format),

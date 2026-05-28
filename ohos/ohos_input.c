@@ -120,7 +120,7 @@ ohos_input_store_button_down(
     down->action_time_ms = action_time;
     down->move_count = ctx->mouse_move_sent_count;
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.input: stage=click_pair state=down trace=%llu button=%d remote=(%ld,%ld) display=(%d,%d) global=(%d,%d) action_time=%lld move_count=%llu",
         (unsigned long long)event->trace_id, dispatch->button,
         event->param1, event->param2,
@@ -175,7 +175,7 @@ ohos_input_log_button_up_pair(
     classification = (ohos_input_abs_long(dx_remote) <= 2 &&
         ohos_input_abs_long(dy_remote) <= 2) ? "click_like" : "drag_like";
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.input: stage=click_pair state=up trace=%llu button=%d down_trace=%llu class=%s down_remote=(%ld,%ld) up_remote=(%ld,%ld) delta_remote=(%ld,%ld) down_display=(%d,%d) up_display=(%d,%d) delta_display=(%d,%d) down_global=(%d,%d) up_global=(%d,%d) dt_ms=%lld moves=%llu down_time=%lld up_time=%lld",
         (unsigned long long)event->trace_id, dispatch->button,
         (unsigned long long)down->trace_id, classification,
@@ -361,7 +361,7 @@ ohos_input_inject_mouse_once(
     }
     if (should_log)
     {
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.input: stage=inject_call trace=%llu msg=%d action=%d button=%d local_time_ms=%lld requested_action_time=-1 display=(%d,%d) global=(%d,%d) axis_type=%d axis_value=%.1f wheel=%d move_log_count=%llu",
             (unsigned long long)event->trace_id,
             event->msg, action, dispatch->button,
@@ -376,7 +376,7 @@ ohos_input_inject_mouse_once(
     {
         location_rc = OH_Input_GetPointerLocation(&actual_display_id,
                                                   &actual_x, &actual_y);
-        LOG(rc == INPUT_SUCCESS ? LOG_LEVEL_INFO : LOG_LEVEL_ERROR,
+        LOG(rc == INPUT_SUCCESS ? LOG_LEVEL_DEBUG : LOG_LEVEL_ERROR,
             "xrdp.ohos.input: stage=inject_result trace=%llu msg=%d action=%d button=%d local_time_ms=%lld requested_action_time=-1 rc=%d display=(%d,%d) global=(%d,%d) actual_rc=%d actual=(%d,%.1f,%.1f) actual_delta=(%.1f,%.1f) axis_type=%d axis_value=%.1f wheel=%d move_log_count=%llu",
             (unsigned long long)(event == 0 ? 0ULL : event->trace_id),
             event == 0 ? 0 : event->msg,
@@ -432,7 +432,7 @@ ohos_input_inject_pointer_move_before_button(
         ohos_input_active_mouse_button_from_mask(
             ctx->pressed_mouse_buttons & ~dispatch->button_mask);
 
-    LOG(LOG_LEVEL_INFO,
+    LOG(LOG_LEVEL_DEBUG,
         "xrdp.ohos.input: stage=button_pre_move trace=%llu msg=%d button=%d remote=(%ld,%ld) last=(%d,%d %dx%d) display=(%d,%d) global=(%d,%d)",
         (unsigned long long)event->trace_id, event->msg, dispatch->button,
         event->param1, event->param2,
@@ -526,8 +526,7 @@ ohos_input_inject_mouse(struct ohos_input_context *ctx,
         buttons_after = ctx->pressed_mouse_buttons;
         if (ohos_input_should_log_result(ctx, 1, event->msg != XRDP_OHOS_WM_MOUSEMOVE))
         {
-            LOG(event->msg != XRDP_OHOS_WM_MOUSEMOVE ?
-                LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: pointer inject trace=%llu mode=mouse msg=%d action=%d button=%d local_time_ms=%lld begin_local_ms=%lld end_local_ms=%lld requested_action_time=-1 pressed=0x%8.8x->0x%8.8x remote=(%ld,%ld) active=%s display=(%d,%d) global=(%d,%d) full=(%d,%d) fit=(%d,%d) source=%dx%d target=%dx%d fit_rect=%d rect=(%d,%d %dx%d) fit_clamped=(%d,%d) inside=%d vpr_valid=%d vpr=%.3f axis_type=%d axis_value=%.1f rc=%d end_rc=%d",
                 (unsigned long long)event->trace_id,
                 event->msg, dispatch->action, dispatch->button,
@@ -688,7 +687,7 @@ ohos_input_handle_event(struct ohos_input_context *ctx,
         {
             ctx->auth_pending_count++;
             ctx->dropped_count++;
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: stage=drop trace=%llu seq=%llu kind=key reason=auth_pending msg=%d auth_pending=%llu dropped=%llu",
                 (unsigned long long)trace_id,
                 (unsigned long long)event_seq, event->msg,
@@ -723,7 +722,7 @@ ohos_input_handle_event(struct ohos_input_context *ctx,
         if (event->msg != XRDP_OHOS_WM_MOUSEMOVE ||
             event_seq <= 5ULL || (event_seq % 200ULL) == 0ULL)
         {
-            LOG(LOG_LEVEL_INFO,
+            LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.input: stage=drop trace=%llu seq=%llu kind=mouse reason=auth_pending msg=%d remote=(%ld,%ld) auth_pending=%llu dropped=%llu",
                 (unsigned long long)trace_id,
                 (unsigned long long)event_seq, event->msg,
@@ -743,8 +742,7 @@ ohos_input_handle_event(struct ohos_input_context *ctx,
     if (event->msg != XRDP_OHOS_WM_MOUSEMOVE ||
         event_seq <= 10ULL || (event_seq % 200ULL) == 0ULL)
     {
-            LOG(event->msg != XRDP_OHOS_WM_MOUSEMOVE ?
-                LOG_LEVEL_INFO : LOG_LEVEL_DEBUG,
+            LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.input: stage=input_mapped trace=%llu seq=%llu msg=%d action=%d button=%d button_mask=0x%8.8x down=%d pressed_before=0x%8.8x remote=(%ld,%ld) active=%s display=(%d,%d) global=(%d,%d) full=(%d,%d) fit=(%d,%d) desktop=%dx%d target=%dx%d fit_rect=%d rect=(%d,%d %dx%d) fit_clamped=(%d,%d) inside=%d",
             (unsigned long long)trace_id,
             (unsigned long long)event_seq, event->msg, dispatch.action,

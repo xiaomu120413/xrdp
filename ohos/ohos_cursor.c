@@ -195,7 +195,7 @@ ohos_cursor_send_system_pointer(struct ohos_mod *self, int pointer_type,
         cursor->sent_kind = OHOS_CURSOR_SENT_SYSTEM;
         cursor->sent_image_valid = 0;
         cursor->update_count++;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cursor: sent pointer=%s type=0x%4.4x reason=%s updates=%llu",
             ohos_cursor_system_pointer_name(pointer_type), pointer_type,
             reason == 0 ? "" : reason,
@@ -267,7 +267,7 @@ ohos_cursor_send_image_pointer(struct ohos_mod *self,
         cursor->sent_image_hash = image->hash;
         cursor->update_count++;
         cursor->image_update_count++;
-        LOG(LOG_LEVEL_INFO,
+        LOG(LOG_LEVEL_DEBUG,
             "xrdp.ohos.cursor: sent image pointer style=%d size=%dx%d hot=(%d,%d) reason=%s updates=%llu image_updates=%llu",
             style, image->width, image->height, image->hot_x, image->hot_y,
             reason == 0 ? "" : reason,
