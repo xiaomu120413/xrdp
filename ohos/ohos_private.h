@@ -22,7 +22,9 @@
 #define OHOS_MOUSE_LOG_SAMPLE 64
 #define OHOS_FRAME_TRACE_SLOTS 256
 #define OHOS_H264_QUEUE_LIMIT 2
-#define OHOS_H264_FLOW_LIMIT 2
+#define OHOS_H264_DEFAULT_FLOW_LIMIT 2
+#define OHOS_H264_MIN_FLOW_LIMIT 1
+#define OHOS_H264_MAX_FLOW_LIMIT 16
 #define OHOS_H264_DEFAULT_FRAME_RATE 60U
 #define OHOS_H264_MAX_FRAME_RATE 120U
 #define OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US 16666ULL
@@ -133,8 +135,8 @@ struct ohos_mod
     int h264_drop_count;
     int h264_waiting_for_sync;
     int h264_flow_ack_frame_id;
+    int h264_flow_limit;
     uint64_t h264_pre_encode_skip_count;
-    uint64_t h264_last_accept_us;
     uint32_t h264_target_frame_rate;
     uint64_t h264_render_min_interval_us;
     char client_name[256];

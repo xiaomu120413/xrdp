@@ -8,10 +8,40 @@
 
 #include "arch.h"
 #include "log.h"
+#include "os_calls.h"
+#include "string_calls.h"
 
 #include <time.h>
 
 #include "ohos_private.h"
+
+static int
+ohos_resolve_h264_flow_limit(void)
+{
+    const char *value;
+    int parsed;
+
+    value = g_getenv("XRDP_GFX_FRAMES_IN_FLIGHT");
+    if (value == 0 || value[0] == '\0')
+    {
+        return OHOS_H264_DEFAULT_FLOW_LIMIT;
+    }
+
+    parsed = g_atoi(value);
+    if (parsed >= OHOS_H264_MIN_FLOW_LIMIT &&
+            parsed <= OHOS_H264_MAX_FLOW_LIMIT)
+    {
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.h264: XRDP_GFX_FRAMES_IN_FLIGHT set to %d",
+            parsed);
+        return parsed;
+    }
+
+    LOG(LOG_LEVEL_INFO,
+        "xrdp.ohos.h264: XRDP_GFX_FRAMES_IN_FLIGHT invalid %s; using %d",
+        value, OHOS_H264_DEFAULT_FLOW_LIMIT);
+    return OHOS_H264_DEFAULT_FLOW_LIMIT;
+}
 
 uint64_t
 ohos_now_us(void)
@@ -88,8 +118,8 @@ ohos_reset_session_stats(struct ohos_mod *self)
     self->h264_drop_count = 0;
     self->h264_waiting_for_sync = 0;
     self->h264_flow_ack_frame_id = self->frame_sequence;
+    self->h264_flow_limit = ohos_resolve_h264_flow_limit();
     self->h264_pre_encode_skip_count = 0;
-    self->h264_last_accept_us = 0;
     self->h264_target_frame_rate = OHOS_H264_DEFAULT_FRAME_RATE;
     self->h264_render_min_interval_us =
         OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US;
@@ -105,6 +135,7 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
     int h264_drop_count = 0;
     int h264_waiting_for_sync = 0;
     uint64_t h264_pre_encode_skip_count = 0;
+    int h264_flow_limit = 0;
     uint32_t h264_target_frame_rate = 0;
     uint64_t h264_render_min_interval_us = 0;
 
@@ -124,6 +155,7 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
         h264_drop_count = self->h264_drop_count;
         h264_waiting_for_sync = self->h264_waiting_for_sync;
         h264_pre_encode_skip_count = self->h264_pre_encode_skip_count;
+        h264_flow_limit = self->h264_flow_limit;
         h264_target_frame_rate = self->h264_target_frame_rate;
         h264_render_min_interval_us = self->h264_render_min_interval_us;
         ohos_unlock_frame_state();
@@ -150,9 +182,10 @@ ohos_log_session_summary(struct ohos_mod *self, const char *reason)
         self->cliprdr.pasteboard_reads, self->cliprdr.pasteboard_writes,
         self->cliprdr.errors);
     LOG(LOG_LEVEL_DEBUG,
-        "xrdp.ohos.session: frame detail client=%s h264_queue=%d h264_waiting_sync=%d h264_pre_encode_skips=%llu h264_target_fps=%u h264_interval_us=%llu rdpsnd_submitted=%u rdpsnd_sent_chunks=%u rdpsnd_sent_bytes=%u rdpsnd_errors=%u",
+        "xrdp.ohos.session: frame detail client=%s h264_queue=%d h264_waiting_sync=%d h264_pre_encode_skips=%llu h264_flow_limit=%d h264_target_fps=%u h264_interval_us=%llu rdpsnd_submitted=%u rdpsnd_sent_chunks=%u rdpsnd_sent_bytes=%u rdpsnd_errors=%u",
         self->client_name, h264_queue_count, h264_waiting_for_sync,
         (unsigned long long)h264_pre_encode_skip_count,
+        h264_flow_limit,
         h264_target_frame_rate,
         (unsigned long long)h264_render_min_interval_us,
         self->rdpsnd.submitted_buffers, self->rdpsnd.sent_chunks,

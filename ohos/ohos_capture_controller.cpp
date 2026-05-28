@@ -80,15 +80,13 @@ void CaptureController::HandleBackendEvent(const xrdp_ohos_backend_event& event)
         case XRDP_OHOS_BACKEND_EVENT_SUPPRESS_OUTPUT:
             if (event.suppress != 0) {
                 EmitCaptureInfo("xrdp output suppressed by client; keep capture running to avoid stale MSTSC video");
-            } else if (event.connected != 0 && event.width > 0 && event.height > 0 &&
-                contentWidth > 0 && contentHeight > 0) {
-                if (callbacks_.updateTarget != nullptr) {
-                    callbacks_.updateTarget(contentWidth, contentHeight,
-                        callbacks_.userData);
-                }
-                StartForClient(contentWidth, contentHeight,
-                    static_cast<uint32_t>(event.width),
-                    static_cast<uint32_t>(event.height), contentLeft, contentTop);
+            } else {
+                EmitCaptureInfo("xrdp output unsuppressed by client; keep current capture geometry");
+            }
+            break;
+        case XRDP_OHOS_BACKEND_EVENT_FRAME_ACK:
+            if (callbacks_.notifyFlowControlOpen != nullptr) {
+                callbacks_.notifyFlowControlOpen(callbacks_.userData);
             }
             break;
         default:

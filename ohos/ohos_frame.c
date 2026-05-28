@@ -194,6 +194,7 @@ ohos_discard_pending_frame(struct ohos_mod *self)
 int
 ohos_draw_external_frame(struct ohos_mod *self, int *painted)
 {
+    static int h264_size_mismatch_log_count = 0;
     struct mod *mod;
     char *data = 0;
     int frame_width = 0;
@@ -327,6 +328,26 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
                             self->height - self->desktop_size.target_top);
     if (paint_width <= 0 || paint_height <= 0)
     {
+        g_free(data);
+        ohos_signal_more_frames(wait_obj, more_pending);
+        return 0;
+    }
+
+    if (frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 &&
+            (frame_width != paint_width || frame_height != paint_height))
+    {
+        h264_size_mismatch_log_count++;
+        if (h264_size_mismatch_log_count <= 5 ||
+                (h264_size_mismatch_log_count % 60) == 0)
+        {
+            LOG(LOG_LEVEL_WARNING,
+                "xrdp.ohos.frame: drop H264 frame with mismatched encoded size seq=%d source_seq=%llu encoded=%dx%d dst=(%d,%d %dx%d) desktop=%dx%d count=%d",
+                sequence, (unsigned long long)source_sequence,
+                frame_width, frame_height,
+                self->desktop_size.target_left, self->desktop_size.target_top,
+                paint_width, paint_height, self->width, self->height,
+                h264_size_mismatch_log_count);
+        }
         g_free(data);
         ohos_signal_more_frames(wait_obj, more_pending);
         return 0;

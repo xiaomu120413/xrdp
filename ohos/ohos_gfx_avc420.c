@@ -376,9 +376,9 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
         if (log_count <= 3 || (log_count % 60) == 0)
         {
             LOG(LOG_LEVEL_DEBUG,
-                "xrdp.ohos.avc420: queued NV12 frame id=%d source_seq=%llu size=%dx%d bytes=%d copy=%.3fms enqueue=%.3fms count=%d",
+                "xrdp.ohos.avc420: queued NV12 frame id=%d source_seq=%llu dst=(%d,%d %dx%d) bytes=%d copy=%.3fms enqueue=%.3fms count=%d",
                 frame_id, (unsigned long long)source_sequence,
-                paint_width, paint_height, (int)data_bytes,
+                dst_left, dst_top, paint_width, paint_height, (int)data_bytes,
                 trace == 0 ? 0.0 : trace->convert_us / 1000.0,
                 trace == 0 ? 0.0 : trace->enqueue_us / 1000.0,
                 log_count);
@@ -484,9 +484,9 @@ ohos_gfx_send_avc420_h264_frame(struct mod *mod,
     if (rv == 0 && (log_count <= 5 || (log_count % 60) == 0))
     {
         LOG(LOG_LEVEL_DEBUG,
-            "xrdp.ohos.avc420: queued pre-encoded H264 frame id=%d source_seq=%llu size=%dx%d bytes=%d copy=%.3fms enqueue=%.3fms count=%d",
+            "xrdp.ohos.avc420: queued pre-encoded H264 frame id=%d source_seq=%llu dst=(%d,%d %dx%d) bytes=%d copy=%.3fms enqueue=%.3fms count=%d",
             frame_id, (unsigned long long)source_sequence,
-            paint_width, paint_height, h264_bytes,
+            dst_left, dst_top, paint_width, paint_height, h264_bytes,
             trace != 0 ? trace->convert_us / 1000.0 : 0.0,
             trace != 0 ? trace->enqueue_us / 1000.0 : 0.0,
             log_count);
@@ -604,9 +604,9 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
         if (log_count <= 3 || (log_count % 60) == 0)
         {
             LOG(LOG_LEVEL_DEBUG,
-                "xrdp.ohos.avc420: queued frame id=%d source_seq=%llu size=%dx%d bytes=%d convert=%.3fms enqueue=%.3fms count=%d",
+                "xrdp.ohos.avc420: queued frame id=%d source_seq=%llu dst=(%d,%d %dx%d) bytes=%d convert=%.3fms enqueue=%.3fms count=%d",
                 frame_id, (unsigned long long)source_sequence,
-                paint_width, paint_height, (int)data_bytes,
+                dst_left, dst_top, paint_width, paint_height, (int)data_bytes,
                 trace == 0 ? 0.0 : trace->convert_us / 1000.0,
                 trace == 0 ? 0.0 : trace->enqueue_us / 1000.0,
                 log_count);

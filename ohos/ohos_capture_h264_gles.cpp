@@ -164,6 +164,8 @@ bool SurfaceH264GlesStage::Start(OHNativeWindow* encoderSurface, uint32_t width,
         pendingFrames_ = 0;
         renderedFrames_ = 0;
         skippedFrames_ = 0;
+        flowControlWakeCount_ = 0;
+        deferredRender_ = false;
         canRender_ = canRender;
         canRenderUserData_ = canRenderUserData;
         running_ = true;
@@ -205,6 +207,18 @@ void SurfaceH264GlesStage::Stop(const std::string& reason)
 bool SurfaceH264GlesStage::running() const
 {
     return running_.load();
+}
+
+void SurfaceH264GlesStage::NotifyFlowControlOpen()
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!running_ || !deferredRender_) {
+            return;
+        }
+        flowControlWakeCount_++;
+    }
+    condition_.notify_one();
 }
 
 void SurfaceH264GlesStage::OnFrameAvailable(void* context)
@@ -389,33 +403,52 @@ void SurfaceH264GlesStage::RenderLoop()
     for (;;) {
         uint64_t frameId = 0;
         bool renderToEncoder = true;
+        bool updateSurface = false;
+        bool deferredOnly = false;
         uint64_t skipped = 0;
         {
             std::unique_lock<std::mutex> lock(mutex_);
-            condition_.wait(lock, [this]() { return !running_.load() || pendingFrames_ > 0; });
+            condition_.wait(lock, [this]() {
+                return !running_.load() || pendingFrames_ > 0 ||
+                    (deferredRender_ && flowControlWakeCount_ > 0);
+            });
             if (!running_.load()) {
                 return;
             }
+            updateSurface = pendingFrames_ > 0;
+            deferredOnly = !updateSurface && deferredRender_;
+            if (deferredOnly && flowControlWakeCount_ > 0) {
+                flowControlWakeCount_--;
+            }
             renderToEncoder = canRender_ == nullptr || canRender_(canRenderUserData_);
             if (!renderToEncoder) {
-                skippedFrames_ += pendingFrames_;
+                skippedFrames_ += updateSurface ? pendingFrames_ : 0;
                 skipped = skippedFrames_;
             }
             frameId = renderedFrames_ + 1;
             pendingFrames_ = 0;
         }
-        if (RenderOneFrame(frameId, renderToEncoder)) {
-            if (!renderToEncoder) {
+        if (!renderToEncoder) {
+            if (updateSurface && RenderOneFrame(frameId, false, true)) {
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    deferredRender_ = true;
+                }
                 if (skipped <= kInitialRenderLogCount ||
                     (skipped % kRenderLogInterval) == 0U) {
                     EmitCaptureDebug("xrdp surface H264 GLES drained frame before encoder skipped=" +
                         std::to_string(skipped) +
                         " reason=xrdp-backpressure");
                 }
-                continue;
             }
+            continue;
+        }
+        if (RenderOneFrame(frameId, true, updateSurface)) {
             std::lock_guard<std::mutex> lock(mutex_);
             renderedFrames_++;
+            if (updateSurface || deferredOnly) {
+                deferredRender_ = false;
+            }
         }
     }
 }
@@ -429,7 +462,7 @@ void SurfaceH264GlesStage::NotifyFrameAvailable()
     condition_.notify_one();
 }
 
-bool SurfaceH264GlesStage::RenderOneFrame(uint64_t frameId, bool renderToEncoder)
+bool SurfaceH264GlesStage::RenderOneFrame(uint64_t frameId, bool renderToEncoder, bool updateSurface)
 {
     if (display_ == EGL_NO_DISPLAY || outputSurface_ == EGL_NO_SURFACE ||
         context_ == EGL_NO_CONTEXT || nativeImage_ == nullptr || program_ == 0) {
@@ -440,11 +473,13 @@ bool SurfaceH264GlesStage::RenderOneFrame(uint64_t frameId, bool renderToEncoder
             Hex(static_cast<uint32_t>(eglGetError())));
         return false;
     }
-    const int32_t updateRc = OH_NativeImage_UpdateSurfaceImage(nativeImage_);
-    if (updateRc != 0) {
-        EmitCaptureError("xrdp surface H264 GLES update native image failed rc=" +
-            std::to_string(updateRc));
-        return false;
+    if (updateSurface) {
+        const int32_t updateRc = OH_NativeImage_UpdateSurfaceImage(nativeImage_);
+        if (updateRc != 0) {
+            EmitCaptureError("xrdp surface H264 GLES update native image failed rc=" +
+                std::to_string(updateRc));
+            return false;
+        }
     }
     if (!renderToEncoder) {
         return true;

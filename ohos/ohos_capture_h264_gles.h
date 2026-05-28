@@ -29,6 +29,7 @@ public:
         OHNativeWindow** captureSurface, bool (*canRender)(void*), void* canRenderUserData,
         std::string& message);
     void Stop(const std::string& reason);
+    void NotifyFlowControlOpen();
     bool running() const;
 
 private:
@@ -41,7 +42,7 @@ private:
         std::string& message);
     void RenderLoop();
     void NotifyFrameAvailable();
-    bool RenderOneFrame(uint64_t frameId, bool renderToEncoder);
+    bool RenderOneFrame(uint64_t frameId, bool renderToEncoder, bool updateSurface);
     void DestroyGl();
     void DestroyNativeImage();
 
@@ -51,6 +52,8 @@ private:
     uint64_t pendingFrames_ = 0;
     uint64_t renderedFrames_ = 0;
     uint64_t skippedFrames_ = 0;
+    uint64_t flowControlWakeCount_ = 0;
+    bool deferredRender_ = false;
     bool (*canRender_)(void*) = nullptr;
     void* canRenderUserData_ = nullptr;
 

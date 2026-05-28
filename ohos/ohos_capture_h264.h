@@ -23,6 +23,7 @@ public:
 
     bool Start(CaptureOptions options, std::string& message);
     void Stop(const std::string& reason);
+    void NotifyFlowControlOpen();
     CaptureDiagnostics Snapshot();
 
 private:

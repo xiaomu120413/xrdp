@@ -213,6 +213,11 @@ void SurfaceH264Capture::Stop(const std::string& reason)
         " release=" + CaptureErrToString(releaseRc));
 }
 
+void SurfaceH264Capture::NotifyFlowControlOpen()
+{
+    gpuStage_.NotifyFlowControlOpen();
+}
+
 CaptureDiagnostics SurfaceH264Capture::Snapshot()
 {
     std::lock_guard<std::mutex> lock(mutex_);

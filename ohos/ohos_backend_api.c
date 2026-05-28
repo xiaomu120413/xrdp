@@ -476,11 +476,9 @@ int EXPORT_CC
 xrdp_ohos_backend_can_accept_encoded_frame(void)
 {
     struct ohos_mod *target;
-    uint64_t now_us;
-    uint64_t elapsed_us = 0;
-    uint64_t target_interval_us = OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US;
     const char *skip_reason = 0;
     int frames_in_flight = 0;
+    int flow_limit = OHOS_H264_DEFAULT_FLOW_LIMIT;
     int status = XRDP_OHOS_BACKEND_STATUS_BACKPRESSURE;
 
     if (ohos_lock_frame_state() != 0)
@@ -495,34 +493,25 @@ xrdp_ohos_backend_can_accept_encoded_frame(void)
     }
     else
     {
-        now_us = ohos_now_us();
         if (target->h264_flow_ack_frame_id > target->frame_sequence)
         {
             target->h264_flow_ack_frame_id = target->frame_sequence;
         }
         frames_in_flight = target->frame_sequence -
                            target->h264_flow_ack_frame_id;
-        elapsed_us = target->h264_last_accept_us == 0 ? 0 :
-                     now_us - target->h264_last_accept_us;
-        target_interval_us = target->h264_render_min_interval_us == 0 ?
-                             OHOS_H264_DEFAULT_RENDER_MIN_INTERVAL_US :
-                             target->h264_render_min_interval_us;
+        flow_limit = target->h264_flow_limit <= 0 ?
+                     OHOS_H264_DEFAULT_FLOW_LIMIT :
+                     target->h264_flow_limit;
         if (target->h264_queue_count >= OHOS_H264_QUEUE_LIMIT)
         {
             skip_reason = "module-queue";
         }
-        else if (frames_in_flight >= OHOS_H264_FLOW_LIMIT)
+        else if (frames_in_flight >= flow_limit)
         {
             skip_reason = "xrdp-frame-ack";
         }
-        else if (target->h264_last_accept_us != 0 &&
-                 elapsed_us < target_interval_us)
-        {
-            skip_reason = "frame-interval";
-        }
         else
         {
-            target->h264_last_accept_us = now_us;
             status = XRDP_OHOS_BACKEND_STATUS_OK;
             skip_reason = 0;
         }
@@ -533,11 +522,10 @@ xrdp_ohos_backend_can_accept_encoded_frame(void)
                     (target->h264_pre_encode_skip_count % 300ULL) == 0)
             {
                 LOG(LOG_LEVEL_DEBUG,
-                    "xrdp.ohos.h264: skip encode before encoder reason=%s elapsed_us=%llu target_interval_us=%llu queue=%d queue_limit=%d in_flight=%d flow_limit=%d ack=%d frame=%d skipped=%llu",
-                    skip_reason, (unsigned long long)elapsed_us,
-                    (unsigned long long)target_interval_us,
+                    "xrdp.ohos.h264: skip encode before encoder reason=%s queue=%d queue_limit=%d in_flight=%d flow_limit=%d ack=%d frame=%d skipped=%llu",
+                    skip_reason,
                     target->h264_queue_count, OHOS_H264_QUEUE_LIMIT,
-                    frames_in_flight, OHOS_H264_FLOW_LIMIT,
+                    frames_in_flight, flow_limit,
                     target->h264_flow_ack_frame_id, target->frame_sequence,
                     (unsigned long long)target->h264_pre_encode_skip_count);
             }

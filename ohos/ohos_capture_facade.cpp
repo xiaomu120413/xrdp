@@ -97,6 +97,11 @@ SurfaceH264Capture& SurfaceCapture()
     return capture;
 }
 
+void NotifyVideoFlowControlOpen(void*)
+{
+    SurfaceCapture().NotifyFlowControlOpen();
+}
+
 bool StartScreenCapture(const CaptureOptions& options, std::string& message, void*)
 {
     const int frameRateStatus = xrdp_ohos_backend_set_encoded_frame_rate(options.frameRate);
@@ -179,6 +184,7 @@ CaptureController& Controller()
         nullptr,
         DescribeDisplayGeometry,
         QueryDisplayRefreshRate,
+        NotifyVideoFlowControlOpen,
         nullptr,
     });
     return controller;

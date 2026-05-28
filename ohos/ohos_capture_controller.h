@@ -19,6 +19,7 @@ using CaptureControllerUpdateTargetFn = void (*)(uint32_t width, uint32_t height
 using CaptureControllerInputFn = void (*)(const std::string& reason, void* userData);
 using CaptureControllerGeometryFn = std::string (*)(void* userData);
 using CaptureControllerRefreshRateFn = uint32_t (*)(void* userData);
+using CaptureControllerFlowControlFn = void (*)(void* userData);
 
 struct CaptureControllerCallbacks {
     CaptureControllerStartFn startCapture = nullptr;
@@ -28,6 +29,7 @@ struct CaptureControllerCallbacks {
     CaptureControllerInputFn resetInput = nullptr;
     CaptureControllerGeometryFn describeGeometry = nullptr;
     CaptureControllerRefreshRateFn queryDisplayRefreshRate = nullptr;
+    CaptureControllerFlowControlFn notifyFlowControlOpen = nullptr;
     void* userData = nullptr;
 };
 
