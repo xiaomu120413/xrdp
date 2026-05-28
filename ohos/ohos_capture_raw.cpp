@@ -74,6 +74,13 @@ RawScreenCapture::~RawScreenCapture()
 bool RawScreenCapture::Start(CaptureOptions options, std::string& message)
 {
     options = NormalizeCaptureOptions(options);
+    if (options.width == 0 || options.height == 0 ||
+        options.width > kMaxCaptureDimension || options.height > kMaxCaptureDimension) {
+        message = "invalid xrdp screen capture size " +
+            DescribeCaptureOptions(options);
+        EmitCaptureError("xrdp screen capture start failed: " + message);
+        return false;
+    }
 
     std::unique_lock<std::mutex> lock(mutex_);
     target_ = options;

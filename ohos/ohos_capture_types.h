@@ -10,9 +10,13 @@
 namespace xrdp_ohos {
 
 struct CaptureOptions {
-    uint32_t width = 2560;
-    uint32_t height = 1440;
-    uint32_t frameRate = 60;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint32_t contentLeft = 0;
+    uint32_t contentTop = 0;
+    uint32_t contentWidth = 0;
+    uint32_t contentHeight = 0;
+    uint32_t frameRate = 0;
     bool showCursor = true;
 };
 

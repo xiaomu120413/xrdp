@@ -52,6 +52,11 @@ void AppendIntFormatField(OH_AVFormat* format, const char* key, const char* name
 OH_AVScreenCaptureConfig BuildSurfaceScreenCaptureConfig(const CaptureOptions& options)
 {
     OH_AVScreenCaptureConfig config {};
+    const uint32_t inputWidth = options.contentWidth == 0 ? options.width :
+        options.contentWidth;
+    const uint32_t inputHeight = options.contentHeight == 0 ? options.height :
+        options.contentHeight;
+
     config.captureMode = OH_CAPTURE_HOME_SCREEN;
     config.dataType = OH_ORIGINAL_STREAM;
     ConfigurePlaybackAudioCapture(config);
@@ -59,8 +64,8 @@ OH_AVScreenCaptureConfig BuildSurfaceScreenCaptureConfig(const CaptureOptions& o
     config.videoInfo.videoCapInfo.displayId = 0;
     config.videoInfo.videoCapInfo.missionIDs = nullptr;
     config.videoInfo.videoCapInfo.missionIDsLen = 0;
-    config.videoInfo.videoCapInfo.videoFrameWidth = static_cast<int32_t>(options.width);
-    config.videoInfo.videoCapInfo.videoFrameHeight = static_cast<int32_t>(options.height);
+    config.videoInfo.videoCapInfo.videoFrameWidth = static_cast<int32_t>(inputWidth);
+    config.videoInfo.videoCapInfo.videoFrameHeight = static_cast<int32_t>(inputHeight);
     config.videoInfo.videoCapInfo.videoSource = OH_VIDEO_SOURCE_SURFACE_RGBA;
     config.videoInfo.videoEncInfo.videoCodec = OH_VIDEO_DEFAULT;
     config.videoInfo.videoEncInfo.videoBitrate = 0;
@@ -85,6 +90,13 @@ SurfaceH264Capture::~SurfaceH264Capture()
 bool SurfaceH264Capture::Start(CaptureOptions options, std::string& message)
 {
     options = NormalizeCaptureOptions(options);
+    if (options.width == 0 || options.height == 0 ||
+        options.width > kMaxCaptureDimension || options.height > kMaxCaptureDimension) {
+        message = "invalid xrdp surface H264 capture size " +
+            DescribeCaptureOptions(options);
+        EmitCaptureError("xrdp surface H264 capture start failed: " + message);
+        return false;
+    }
     std::unique_lock<std::mutex> lock(mutex_);
     if (running_.load()) {
         message = "xrdp surface H264 capture already running " + DescribeCaptureOptions(target_);
@@ -100,8 +112,14 @@ bool SurfaceH264Capture::Start(CaptureOptions options, std::string& message)
         return false;
     }
     std::string gpuMessage;
-    if (!gpuStage_.Start(surface, options.width, options.height, &captureSurface,
-        callbacks_.canAcceptEncodedVideo, callbacks_.userData, gpuMessage)) {
+    if (!gpuStage_.Start(surface, options.width, options.height,
+        options.contentWidth == 0 ? options.width : options.contentWidth,
+        options.contentHeight == 0 ? options.height : options.contentHeight,
+        options.contentLeft, options.contentTop,
+        options.contentWidth == 0 ? options.width : options.contentWidth,
+        options.contentHeight == 0 ? options.height : options.contentHeight,
+        &captureSurface, callbacks_.canAcceptEncodedVideo,
+        callbacks_.userData, gpuMessage)) {
         Cleanup(codec, surface, capture, true);
         message = "xrdp surface H264 GPU converter unavailable: " + gpuMessage;
         EmitCaptureError("xrdp surface H264 capture start failed: " + message);
@@ -161,7 +179,7 @@ bool SurfaceH264Capture::Start(CaptureOptions options, std::string& message)
     RequestSurfaceH264KeyFrame(codec_, "start");
     message = "xrdp surface H264 capture started " + DescribeCaptureOptions(options) +
         " source=" + VideoSourceName(captureSource_) +
-        " gpu=1 path=surface-rgba-to-recordable-encoder-full";
+        " gpu=1 path=surface-rgba-to-recordable-encoder-letterbox";
     EmitCaptureInfo(message);
     return true;
 }

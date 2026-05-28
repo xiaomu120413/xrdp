@@ -53,6 +53,10 @@ private:
     bool requested_ = false;
     uint32_t width_ = 0;
     uint32_t height_ = 0;
+    uint32_t contentLeft_ = 0;
+    uint32_t contentTop_ = 0;
+    uint32_t contentWidth_ = 0;
+    uint32_t contentHeight_ = 0;
     std::chrono::steady_clock::time_point lastFailure_;
     std::atomic<bool> inputAuthorizationPrimed_ { false };
 };

@@ -25,7 +25,9 @@ public:
     SurfaceH264GlesStage(const SurfaceH264GlesStage&) = delete;
     SurfaceH264GlesStage& operator=(const SurfaceH264GlesStage&) = delete;
 
-    bool Start(OHNativeWindow* encoderSurface, uint32_t width, uint32_t height,
+    bool Start(OHNativeWindow* encoderSurface, uint32_t outputWidth, uint32_t outputHeight,
+        uint32_t inputWidth, uint32_t inputHeight, uint32_t contentLeft,
+        uint32_t contentTop, uint32_t contentWidth, uint32_t contentHeight,
         OHNativeWindow** captureSurface, bool (*canRender)(void*), void* canRenderUserData,
         std::string& message);
     void Stop(const std::string& reason);
@@ -73,6 +75,12 @@ private:
     OHNativeWindow* encoderSurface_ = nullptr;
     uint32_t width_ = 0;
     uint32_t height_ = 0;
+    uint32_t inputWidth_ = 0;
+    uint32_t inputHeight_ = 0;
+    uint32_t contentLeft_ = 0;
+    uint32_t contentTop_ = 0;
+    uint32_t contentWidth_ = 0;
+    uint32_t contentHeight_ = 0;
     std::thread renderThread_;
 };
 

@@ -218,6 +218,10 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     tintptr wait_obj = 0;
     int paint_width;
     int paint_height;
+    int draw_left;
+    int draw_top;
+    int draw_width;
+    int draw_height;
     int more_pending = 0;
     int rv = 0;
 
@@ -309,8 +313,8 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     }
 
     mod = &self->mod;
-    paint_width = ohos_min(self->desktop_size.target_width, frame_width);
-    paint_height = ohos_min(self->desktop_size.target_height, frame_height);
+    paint_width = self->desktop_size.target_width;
+    paint_height = self->desktop_size.target_height;
     if (paint_width <= 0 || paint_height <= 0 ||
             self->desktop_size.target_left < 0 ||
             self->desktop_size.target_top < 0 ||
@@ -332,9 +336,22 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
         ohos_signal_more_frames(wait_obj, more_pending);
         return 0;
     }
+    draw_left = self->desktop_size.target_left;
+    draw_top = self->desktop_size.target_top;
+    draw_width = paint_width;
+    draw_height = paint_height;
 
     if (frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 &&
-            (frame_width != paint_width || frame_height != paint_height))
+            frame_width == self->width && frame_height == self->height)
+    {
+        draw_left = 0;
+        draw_top = 0;
+        draw_width = self->width;
+        draw_height = self->height;
+    }
+
+    if (frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 &&
+            (frame_width != draw_width || frame_height != draw_height))
     {
         h264_size_mismatch_log_count++;
         if (h264_size_mismatch_log_count <= 5 ||
@@ -344,8 +361,8 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
                 "xrdp.ohos.frame: drop H264 frame with mismatched encoded size seq=%d source_seq=%llu encoded=%dx%d dst=(%d,%d %dx%d) desktop=%dx%d count=%d",
                 sequence, (unsigned long long)source_sequence,
                 frame_width, frame_height,
-                self->desktop_size.target_left, self->desktop_size.target_top,
-                paint_width, paint_height, self->width, self->height,
+                draw_left, draw_top,
+                draw_width, draw_height, self->width, self->height,
                 h264_size_mismatch_log_count);
         }
         g_free(data);
@@ -357,9 +374,9 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
     if ((frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 &&
             ohos_gfx_send_avc420_h264_frame(mod, data,
                                             (int)frame_data_bytes,
-                                            self->desktop_size.target_left,
-                                            self->desktop_size.target_top,
-                                            paint_width, paint_height,
+                                            draw_left, draw_top,
+                                            draw_width, draw_height,
+                                            self->width, self->height,
                                             sequence, source_sequence,
                                             &gfx_trace) == 0) ||
             (frame_format == XRDP_OHOS_FRAME_FORMAT_NV12 &&
@@ -368,6 +385,7 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
                                             self->desktop_size.target_left,
                                             self->desktop_size.target_top,
                                             paint_width, paint_height,
+                                            self->width, self->height,
                                             sequence, source_sequence,
                                             &gfx_trace) == 0) ||
             (frame_format != XRDP_OHOS_FRAME_FORMAT_NV12 &&
@@ -375,7 +393,8 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
              ohos_gfx_send_avc420_frame(mod, data, frame_width, frame_height,
                                         self->desktop_size.target_left,
                                         self->desktop_size.target_top,
-                                        paint_width, paint_height, sequence,
+                                        paint_width, paint_height,
+                                        self->width, self->height, sequence,
                                         source_sequence, &gfx_trace) == 0))
     {
         ohos_update_gfx_trace(self, sequence, frame_format, draw_start_us,
@@ -388,8 +407,15 @@ ohos_draw_external_frame(struct ohos_mod *self, int *painted)
                 "xrdp.ohos.frame: queued AVC420 frame seq=%d source_seq=%llu pixel=%s size=%dx%d dst=(%d,%d %dx%d) desktop=%dx%d bytes=%d",
                 sequence, (unsigned long long)source_sequence,
                 ohos_frame_format_name(frame_format), frame_width, frame_height,
-                self->desktop_size.target_left, self->desktop_size.target_top,
-                paint_width, paint_height, self->width, self->height,
+                frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 ?
+                    draw_left : self->desktop_size.target_left,
+                frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 ?
+                    draw_top : self->desktop_size.target_top,
+                frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 ?
+                    draw_width : paint_width,
+                frame_format == XRDP_OHOS_FRAME_FORMAT_H264_AVC420 ?
+                    draw_height : paint_height,
+                self->width, self->height,
                 (int)frame_data_bytes);
             LOG(LOG_LEVEL_DEBUG,
                 "xrdp.ohos.e2e: enqueue frame=%d source_seq=%llu capture_to_bridge=%.3fms bridge_to_submitter=%.3fms submitter_copy=%.3fms submitter_to_backend=%.3fms backend_copy=%.3fms backend_to_draw=%.3fms avc420_copy_or_convert=%.3fms avc420_enqueue=%.3fms pixel=%s",

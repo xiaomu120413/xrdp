@@ -50,6 +50,21 @@ ohos_clip_u8(int value)
     return value;
 }
 
+static int
+ohos_scale_index(int value, int target_size, int source_size)
+{
+    int64_t numerator;
+    int64_t denominator;
+
+    if (source_size <= 1 || target_size <= 1)
+    {
+        return 0;
+    }
+    numerator = (int64_t)value * (int64_t)(source_size - 1);
+    denominator = target_size - 1;
+    return (int)((numerator + denominator / 2) / denominator);
+}
+
 static void
 ohos_bgr_to_yuv709_full(int b, int g, int r,
                         unsigned char *y, unsigned char *u, unsigned char *v)
@@ -76,8 +91,8 @@ ohos_bgra_to_nv12(const char *bgra, int frame_width, int frame_height,
     int x;
     int y;
 
-    if (bgra == 0 || nv12 == 0 || frame_width < width ||
-            frame_height < height || width <= 0 || height <= 0 ||
+    if (bgra == 0 || nv12 == 0 || frame_width <= 0 ||
+            frame_height <= 0 || width <= 0 || height <= 0 ||
             (width & 1) != 0 || (height & 1) != 0)
     {
         return 1;
@@ -88,8 +103,10 @@ ohos_bgra_to_nv12(const char *bgra, int frame_width, int frame_height,
 
     for (y = 0; y < height; ++y)
     {
+        const int source_y = ohos_scale_index(y, height, frame_height);
         const unsigned char *src = (const unsigned char *)bgra +
-                                   ((size_t)y * (size_t)frame_width * 4U);
+                                   ((size_t)source_y *
+                                    (size_t)frame_width * 4U);
         unsigned char *dst_y = y_plane + ((size_t)y * (size_t)width);
 
         for (x = 0; x < width; ++x)
@@ -97,7 +114,8 @@ ohos_bgra_to_nv12(const char *bgra, int frame_width, int frame_height,
             unsigned char yy;
             unsigned char uu;
             unsigned char vv;
-            const unsigned char *px = src + ((size_t)x * 4U);
+            const int source_x = ohos_scale_index(x, width, frame_width);
+            const unsigned char *px = src + ((size_t)source_x * 4U);
 
             ohos_bgr_to_yuv709_full(px[0], px[1], px[2], &yy, &uu, &vv);
             dst_y[x] = yy;
@@ -117,14 +135,19 @@ ohos_bgra_to_nv12(const char *bgra, int frame_width, int frame_height,
 
             for (dy = 0; dy < 2; ++dy)
             {
+                const int source_y = ohos_scale_index(y + dy, height,
+                                                      frame_height);
                 const unsigned char *src = (const unsigned char *)bgra +
-                    ((size_t)(y + dy) * (size_t)frame_width * 4U);
+                    ((size_t)source_y * (size_t)frame_width * 4U);
                 for (dx = 0; dx < 2; ++dx)
                 {
                     unsigned char yy;
                     unsigned char uu;
                     unsigned char vv;
-                    const unsigned char *px = src + ((size_t)(x + dx) * 4U);
+                    const int source_x = ohos_scale_index(x + dx, width,
+                                                          frame_width);
+                    const unsigned char *px =
+                        src + ((size_t)source_x * 4U);
 
                     ohos_bgr_to_yuv709_full(px[0], px[1], px[2],
                                             &yy, &uu, &vv);
@@ -183,18 +206,102 @@ ohos_put_rect_wh(char **p, int left, int top, int width, int height)
     ohos_put_u16(p, height);
 }
 
+static void
+ohos_put_rect_xyxy(char **p, const struct xrdp_egfx_rect *rect)
+{
+    ohos_put_u16(p, rect->x1);
+    ohos_put_u16(p, rect->y1);
+    ohos_put_u16(p, rect->x2);
+    ohos_put_u16(p, rect->y2);
+}
+
+static int
+ohos_add_fill_rect(struct xrdp_egfx_rect *rects, int count,
+                   int left, int top, int right, int bottom)
+{
+    if (rects == 0 || count >= 4 || right <= left || bottom <= top)
+    {
+        return count;
+    }
+    rects[count].x1 = (short)left;
+    rects[count].y1 = (short)top;
+    rects[count].x2 = (short)right;
+    rects[count].y2 = (short)bottom;
+    return count + 1;
+}
+
+static int
+ohos_build_letterbox_rects(int dst_left, int dst_top, int width, int height,
+                           int desktop_width, int desktop_height,
+                           struct xrdp_egfx_rect *rects)
+{
+    int count = 0;
+    int right;
+    int bottom;
+
+    if (rects == 0 || dst_left < 0 || dst_top < 0 || width <= 0 ||
+            height <= 0 || desktop_width <= 0 || desktop_height <= 0)
+    {
+        return 0;
+    }
+
+    right = dst_left + width;
+    bottom = dst_top + height;
+    if (right > desktop_width || bottom > desktop_height)
+    {
+        return 0;
+    }
+
+    count = ohos_add_fill_rect(rects, count, 0, 0,
+                               desktop_width, dst_top);
+    count = ohos_add_fill_rect(rects, count, 0, bottom,
+                               desktop_width, desktop_height);
+    count = ohos_add_fill_rect(rects, count, 0, dst_top,
+                               dst_left, bottom);
+    count = ohos_add_fill_rect(rects, count, right, dst_top,
+                               desktop_width, bottom);
+    return count;
+}
+
+static void
+ohos_put_solid_fill_command(char **p, const struct xrdp_egfx_rect *rects,
+                            int rect_count)
+{
+    int index;
+    const int fill_bytes = 16 + rect_count * 8;
+
+    ohos_put_gfx_header(p, XR_RDPGFX_CMDID_SOLIDFILL, fill_bytes);
+    ohos_put_u16(p, 0);
+    ohos_put_u32(p, 0);
+    ohos_put_u16(p, rect_count);
+    for (index = 0; index < rect_count; index++)
+    {
+        ohos_put_rect_xyxy(p, &rects[index]);
+    }
+}
+
 static char *
 ohos_build_avc420_commands_ex(int dst_left, int dst_top, int width,
-                              int height, int frame_id,
+                              int height, int desktop_width,
+                              int desktop_height, int frame_id,
                               int already_compressed, int *bytes)
 {
     const int start_bytes = 16;
     const int wire_bytes = 45;
     const int end_bytes = 12;
-    const int total = start_bytes + wire_bytes + end_bytes;
+    struct xrdp_egfx_rect fill_rects[4];
+    int fill_rect_count;
+    int fill_bytes;
+    int total;
     char *cmd;
     char *p;
 
+    fill_rect_count = ohos_build_letterbox_rects(dst_left, dst_top, width,
+                                                 height, desktop_width,
+                                                 desktop_height,
+                                                 fill_rects);
+    fill_bytes = fill_rect_count > 0 ? 16 + fill_rect_count * 8 : 0;
+    total = start_bytes + fill_bytes + wire_bytes + end_bytes;
     cmd = (char *)g_malloc(total, 0);
     if (cmd == 0)
     {
@@ -205,6 +312,11 @@ ohos_build_avc420_commands_ex(int dst_left, int dst_top, int width,
     ohos_put_gfx_header(&p, XR_RDPGFX_CMDID_STARTFRAME, start_bytes);
     ohos_put_u32(&p, (unsigned int)frame_id);
     ohos_put_u32(&p, 0);
+
+    if (fill_rect_count > 0)
+    {
+        ohos_put_solid_fill_command(&p, fill_rects, fill_rect_count);
+    }
 
     ohos_put_gfx_header(&p, XR_RDPGFX_CMDID_WIRETOSURFACE_1, wire_bytes);
     ohos_put_u16(&p, 0);
@@ -228,16 +340,18 @@ static int
 ohos_copy_nv12(const char *nv12, int frame_width, int frame_height,
                int stride, int width, int height, unsigned char *target)
 {
+    int x;
     int y;
     unsigned char *target_y;
     unsigned char *target_uv;
     const unsigned char *source_y;
     const unsigned char *source_uv;
 
-    if (nv12 == 0 || target == 0 || frame_width < width ||
-            frame_height < height || stride < frame_width ||
+    if (nv12 == 0 || target == 0 || frame_width <= 0 ||
+            frame_height <= 0 || stride < frame_width ||
             width <= 0 || height <= 0 || (width & 1) != 0 ||
-            (height & 1) != 0)
+            (height & 1) != 0 || (frame_width & 1) != 0 ||
+            (frame_height & 1) != 0)
     {
         return 1;
     }
@@ -249,16 +363,43 @@ ohos_copy_nv12(const char *nv12, int frame_width, int frame_height,
 
     for (y = 0; y < height; ++y)
     {
-        g_memcpy(target_y + ((size_t)y * (size_t)width),
-                 source_y + ((size_t)y * (size_t)stride),
-                 width);
+        const int source_row = ohos_scale_index(y, height, frame_height);
+        unsigned char *dst = target_y + ((size_t)y * (size_t)width);
+        const unsigned char *src =
+            source_y + ((size_t)source_row * (size_t)stride);
+        for (x = 0; x < width; ++x)
+        {
+            dst[x] = src[ohos_scale_index(x, width, frame_width)];
+        }
     }
 
     for (y = 0; y < height / 2; ++y)
     {
-        g_memcpy(target_uv + ((size_t)y * (size_t)width),
-                 source_uv + ((size_t)y * (size_t)stride),
-                 width);
+        unsigned char *dst = target_uv + ((size_t)y * (size_t)width);
+        const int output_y = y * 2;
+        int source_sample_y = ohos_scale_index(output_y, height,
+                                               frame_height);
+        const unsigned char *src;
+
+        source_sample_y &= ~1;
+        if (source_sample_y >= frame_height)
+        {
+            source_sample_y = frame_height - 2;
+        }
+        src = source_uv + ((size_t)(source_sample_y / 2) *
+                           (size_t)stride);
+        for (x = 0; x < width; x += 2)
+        {
+            int source_sample_x = ohos_scale_index(x, width, frame_width);
+
+            source_sample_x &= ~1;
+            if (source_sample_x >= frame_width)
+            {
+                source_sample_x = frame_width - 2;
+            }
+            dst[x] = src[source_sample_x];
+            dst[x + 1] = src[source_sample_x + 1];
+        }
     }
 
     return 0;
@@ -274,6 +415,8 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
                                 int dst_top,
                                 int paint_width,
                                 int paint_height,
+                                int desktop_width,
+                                int desktop_height,
                                 int frame_id,
                                 uint64_t source_sequence,
                                 struct ohos_gfx_avc420_trace *trace)
@@ -303,7 +446,6 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
 
     if (mod == 0 || mod->server_egfx_cmd == 0 || nv12 == 0 ||
             paint_width <= 0 || paint_height <= 0 ||
-            frame_width < paint_width || frame_height < paint_height ||
             stride < frame_width ||
             dst_left < 0 || dst_top < 0 ||
             (paint_width & 1) != 0 || (paint_height & 1) != 0)
@@ -348,7 +490,8 @@ ohos_gfx_send_avc420_nv12_frame(struct mod *mod,
     }
 
     cmd = ohos_build_avc420_commands_ex(dst_left, dst_top, paint_width,
-                                        paint_height, frame_id, 0,
+                                        paint_height, desktop_width,
+                                        desktop_height, frame_id, 0,
                                         &cmd_bytes);
     if (cmd == 0)
     {
@@ -402,6 +545,8 @@ ohos_gfx_send_avc420_h264_frame(struct mod *mod,
                                 int dst_top,
                                 int paint_width,
                                 int paint_height,
+                                int desktop_width,
+                                int desktop_height,
                                 int frame_id,
                                 uint64_t source_sequence,
                                 struct ohos_gfx_avc420_trace *trace)
@@ -458,7 +603,8 @@ ohos_gfx_send_avc420_h264_frame(struct mod *mod,
     }
 
     cmd = ohos_build_avc420_commands_ex(dst_left, dst_top, paint_width,
-                                        paint_height, frame_id, 1,
+                                        paint_height, desktop_width,
+                                        desktop_height, frame_id, 1,
                                         &cmd_bytes);
     if (cmd == 0)
     {
@@ -503,6 +649,8 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
                            int dst_top,
                            int paint_width,
                            int paint_height,
+                           int desktop_width,
+                           int desktop_height,
                            int frame_id,
                            uint64_t source_sequence,
                            struct ohos_gfx_avc420_trace *trace)
@@ -532,7 +680,6 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
 
     if (mod == 0 || mod->server_egfx_cmd == 0 || bgra == 0 ||
             paint_width <= 0 || paint_height <= 0 ||
-            frame_width < paint_width || frame_height < paint_height ||
             dst_left < 0 || dst_top < 0 ||
             (paint_width & 1) != 0 || (paint_height & 1) != 0)
     {
@@ -576,7 +723,8 @@ ohos_gfx_send_avc420_frame(struct mod *mod,
     }
 
     cmd = ohos_build_avc420_commands_ex(dst_left, dst_top, paint_width,
-                                        paint_height, frame_id, 0,
+                                        paint_height, desktop_width,
+                                        desktop_height, frame_id, 0,
                                         &cmd_bytes);
     if (cmd == 0)
     {

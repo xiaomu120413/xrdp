@@ -51,7 +51,8 @@ void CaptureController::HandleBackendEvent(const xrdp_ohos_backend_event& event)
             if (event.width > 0 && event.height > 0 &&
                 contentWidth > 0 && contentHeight > 0) {
                 if (callbacks_.updateTarget != nullptr) {
-                    callbacks_.updateTarget(contentWidth, contentHeight,
+                    callbacks_.updateTarget(static_cast<uint32_t>(event.width),
+                        static_cast<uint32_t>(event.height),
                         callbacks_.userData);
                 }
                 StartForClient(contentWidth, contentHeight,
@@ -69,7 +70,8 @@ void CaptureController::HandleBackendEvent(const xrdp_ohos_backend_event& event)
             if (event.connected != 0 && event.width > 0 && event.height > 0 &&
                 contentWidth > 0 && contentHeight > 0) {
                 if (callbacks_.updateTarget != nullptr) {
-                    callbacks_.updateTarget(contentWidth, contentHeight,
+                    callbacks_.updateTarget(static_cast<uint32_t>(event.width),
+                        static_cast<uint32_t>(event.height),
                         callbacks_.userData);
                 }
                 StartForClient(contentWidth, contentHeight,
@@ -104,14 +106,24 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height,
     uint32_t desktopWidth, uint32_t desktopHeight, uint32_t contentLeft,
     uint32_t contentTop)
 {
-    if (width == 0 || height == 0 || width > kMaxCaptureDimension || height > kMaxCaptureDimension ||
+    const uint32_t outputWidth = desktopWidth > 0 ? desktopWidth : width;
+    const uint32_t outputHeight = desktopHeight > 0 ? desktopHeight : height;
+    if (width == 0 || height == 0 || outputWidth == 0 || outputHeight == 0 ||
+        width > kMaxCaptureDimension || height > kMaxCaptureDimension ||
+        outputWidth > kMaxCaptureDimension || outputHeight > kMaxCaptureDimension ||
+        contentLeft > outputWidth || contentTop > outputHeight ||
+        width > outputWidth - contentLeft || height > outputHeight - contentTop ||
         callbacks_.startCapture == nullptr) {
         return;
     }
 
     CaptureOptions options {};
-    options.width = width;
-    options.height = height;
+    options.width = outputWidth;
+    options.height = outputHeight;
+    options.contentLeft = contentLeft;
+    options.contentTop = contentTop;
+    options.contentWidth = width;
+    options.contentHeight = height;
     const uint32_t displayRefreshRate = callbacks_.queryDisplayRefreshRate != nullptr ?
         callbacks_.queryDisplayRefreshRate(callbacks_.userData) : 0;
     options.frameRate = ResolveCaptureFrameRate(displayRefreshRate);
@@ -120,18 +132,27 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height,
 
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (requested_ && width_ == width && height_ == height) {
+        if (requested_ && width_ == outputWidth && height_ == outputHeight &&
+            contentLeft_ == contentLeft && contentTop_ == contentTop &&
+            contentWidth_ == width && contentHeight_ == height) {
             return;
         }
-        restartCapture = requested_ && (width_ != width || height_ != height);
+        restartCapture = requested_ && (width_ != outputWidth ||
+            height_ != outputHeight || contentLeft_ != contentLeft ||
+            contentTop_ != contentTop || contentWidth_ != width ||
+            contentHeight_ != height);
         const auto now = std::chrono::steady_clock::now();
         if (lastFailure_ != std::chrono::steady_clock::time_point {} &&
             now - lastFailure_ < std::chrono::seconds(3)) {
             return;
         }
         requested_ = true;
-        width_ = width;
-        height_ = height;
+        width_ = outputWidth;
+        height_ = outputHeight;
+        contentLeft_ = contentLeft;
+        contentTop_ = contentTop;
+        contentWidth_ = width;
+        contentHeight_ = height;
     }
 
     std::string geometry = callbacks_.describeGeometry != nullptr ?
@@ -140,7 +161,7 @@ void CaptureController::StartForClient(uint32_t width, uint32_t height,
         geometry = " " + geometry;
     }
     EmitCaptureInfo("xrdp active mstsc session detected; scheduling screen capture desktop=" +
-        std::to_string(desktopWidth) + "x" + std::to_string(desktopHeight) +
+        std::to_string(outputWidth) + "x" + std::to_string(outputHeight) +
         " content=(" + std::to_string(contentLeft) + "," +
         std::to_string(contentTop) + " " + std::to_string(width) + "x" +
         std::to_string(height) + ")" + geometry +
@@ -180,6 +201,10 @@ void CaptureController::StopForClient(const std::string& reason)
         requested_ = false;
         width_ = 0;
         height_ = 0;
+        contentLeft_ = 0;
+        contentTop_ = 0;
+        contentWidth_ = 0;
+        contentHeight_ = 0;
     }
     if (callbacks_.stopCapture != nullptr) {
         callbacks_.stopCapture(reason, callbacks_.userData);

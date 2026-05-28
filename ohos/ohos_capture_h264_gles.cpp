@@ -131,11 +131,19 @@ SurfaceH264GlesStage::~SurfaceH264GlesStage()
     Stop("destroy");
 }
 
-bool SurfaceH264GlesStage::Start(OHNativeWindow* encoderSurface, uint32_t width,
-    uint32_t height, OHNativeWindow** captureSurface, bool (*canRender)(void*),
+bool SurfaceH264GlesStage::Start(OHNativeWindow* encoderSurface,
+    uint32_t outputWidth, uint32_t outputHeight, uint32_t inputWidth,
+    uint32_t inputHeight, uint32_t contentLeft, uint32_t contentTop,
+    uint32_t contentWidth, uint32_t contentHeight,
+    OHNativeWindow** captureSurface, bool (*canRender)(void*),
     void* canRenderUserData, std::string& message)
 {
-    if (encoderSurface == nullptr || captureSurface == nullptr || width == 0 || height == 0) {
+    if (encoderSurface == nullptr || captureSurface == nullptr ||
+        outputWidth == 0 || outputHeight == 0 || inputWidth == 0 ||
+        inputHeight == 0 || contentWidth == 0 || contentHeight == 0 ||
+        contentLeft > outputWidth || contentTop > outputHeight ||
+        contentWidth > outputWidth - contentLeft ||
+        contentHeight > outputHeight - contentTop) {
         message = "invalid GLES stage input";
         return false;
     }
@@ -148,9 +156,9 @@ bool SurfaceH264GlesStage::Start(OHNativeWindow* encoderSurface, uint32_t width,
         }
     }
 
-    if (!InitEgl(encoderSurface, width, height, message) ||
+    if (!InitEgl(encoderSurface, outputWidth, outputHeight, message) ||
         !InitProgram(message) ||
-        !InitInputSurface(width, height, captureSurface, message)) {
+        !InitInputSurface(inputWidth, inputHeight, captureSurface, message)) {
         DestroyNativeImage();
         DestroyGl();
         return false;
@@ -159,8 +167,14 @@ bool SurfaceH264GlesStage::Start(OHNativeWindow* encoderSurface, uint32_t width,
     {
         std::lock_guard<std::mutex> lock(mutex_);
         encoderSurface_ = encoderSurface;
-        width_ = width;
-        height_ = height;
+        width_ = outputWidth;
+        height_ = outputHeight;
+        inputWidth_ = inputWidth;
+        inputHeight_ = inputHeight;
+        contentLeft_ = contentLeft;
+        contentTop_ = contentTop;
+        contentWidth_ = contentWidth;
+        contentHeight_ = contentHeight;
         pendingFrames_ = 0;
         renderedFrames_ = 0;
         skippedFrames_ = 0;
@@ -172,7 +186,11 @@ bool SurfaceH264GlesStage::Start(OHNativeWindow* encoderSurface, uint32_t width,
     }
     renderThread_ = std::thread([this]() { RenderLoop(); });
     message = "xrdp surface H264 GLES RGBA input to recordable encoder surface started " +
-        std::to_string(width) + "x" + std::to_string(height);
+        std::to_string(outputWidth) + "x" + std::to_string(outputHeight) +
+        " input=" + std::to_string(inputWidth) + "x" + std::to_string(inputHeight) +
+        " content=(" + std::to_string(contentLeft) + "," +
+        std::to_string(contentTop) + " " + std::to_string(contentWidth) + "x" +
+        std::to_string(contentHeight) + ")";
     EmitCaptureInfo(message);
     return true;
 }
@@ -500,7 +518,13 @@ bool SurfaceH264GlesStage::RenderOneFrame(uint64_t frameId, bool renderToEncoder
          1.0F,  1.0F, 1.0F, 1.0F,
     };
 
+    const GLint viewportX = static_cast<GLint>(contentLeft_);
+    const GLint viewportY = static_cast<GLint>(height_ - contentTop_ - contentHeight_);
     glViewport(0, 0, static_cast<GLsizei>(width_), static_cast<GLsizei>(height_));
+    glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(viewportX, viewportY, static_cast<GLsizei>(contentWidth_),
+        static_cast<GLsizei>(contentHeight_));
     glUseProgram(program_);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, oesTexture_);
@@ -531,7 +555,12 @@ bool SurfaceH264GlesStage::RenderOneFrame(uint64_t frameId, bool renderToEncoder
     if (frameId <= kInitialRenderLogCount || (frameId % kRenderLogInterval) == 0U) {
         EmitCaptureDebug("xrdp surface H264 GLES rendered frame=" + std::to_string(frameId) +
             " size=" + std::to_string(width_) + "x" + std::to_string(height_) +
-            " path=surface-rgba-to-recordable-encoder-full");
+            " input=" + std::to_string(inputWidth_) + "x" +
+            std::to_string(inputHeight_) +
+            " content=(" + std::to_string(contentLeft_) + "," +
+            std::to_string(contentTop_) + " " + std::to_string(contentWidth_) +
+            "x" + std::to_string(contentHeight_) + ")" +
+            " path=surface-rgba-to-recordable-encoder-letterbox");
     }
     return true;
 }
@@ -570,6 +599,12 @@ void SurfaceH264GlesStage::DestroyGl()
     encoderSurface_ = nullptr;
     width_ = 0;
     height_ = 0;
+    inputWidth_ = 0;
+    inputHeight_ = 0;
+    contentLeft_ = 0;
+    contentTop_ = 0;
+    contentWidth_ = 0;
+    contentHeight_ = 0;
 }
 
 void SurfaceH264GlesStage::DestroyNativeImage()
