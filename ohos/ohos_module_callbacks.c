@@ -312,6 +312,7 @@ ohos_mod_connect(struct mod *mod, int fd)
                                        "session_connect", 1);
     ohos_cursor_start_session(self);
     ohos_input_prime_authorization("session connect");
+    (void)ohos_rdpdr_print_connect(&self->rdpdr_print);
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
     ohos_forward_desktop_event(self, XRDP_OHOS_BACKEND_EVENT_SESSION_CONNECT);
@@ -406,6 +407,9 @@ ohos_mod_event(struct mod *mod, int msg, tbus param1, tbus param2,
         {
             int rv = 0;
             self->channel_data_event_count++;
+            rv |= ohos_rdpdr_print_process_channel_data(&self->rdpdr_print,
+                                                        param1, param2,
+                                                        param3, param4);
             rv |= ohos_rdpsnd_process_channel_data(&self->rdpsnd,
                                                     param1, param2,
                                                     param3, param4);
@@ -470,6 +474,7 @@ ohos_mod_end(struct mod *mod)
     ohos_log_session_summary(self, "client_disconnect");
     ohos_cursor_end_session(self, "client_disconnect");
     ohos_input_reset(&self->input, "session end");
+    ohos_rdpdr_print_disconnect(&self->rdpdr_print);
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
     if (ohos_lock_frame_state() == 0)
@@ -538,6 +543,8 @@ ohos_mod_get_wait_objs(struct mod *mod, tbus *read_objs, int *rcount,
         read_objs[*rcount] = self->frame_wait_obj;
         (*rcount)++;
     }
+    (void)ohos_rdpdr_print_get_wait_objs(&self->rdpdr_print,
+                                         read_objs, rcount);
     if (timeout != 0 && *timeout < 0)
     {
         *timeout = 1000;
@@ -587,6 +594,7 @@ ohos_mod_check_wait_objs(struct mod *mod)
                 self->frame_draw_count);
         }
     }
+    rv |= ohos_rdpdr_print_check_wait_objs(&self->rdpdr_print);
     rv |= ohos_rdpsnd_check_wait_objs(&self->rdpsnd);
     rv |= ohos_cliprdr_check_wait_objs(&self->cliprdr);
     rv |= ohos_cursor_check_wait_objs(self);

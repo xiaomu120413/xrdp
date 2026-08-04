@@ -12,6 +12,7 @@
 #include "ohos_desktop_size.h"
 #include "ohos_gfx_avc420.h"
 #include "ohos_input.h"
+#include "ohos_rdpdr_print.h"
 #include "ohos_rdpsnd.h"
 
 #ifndef XRDP_OHOS_API
@@ -146,6 +147,7 @@ struct ohos_mod
     struct ohos_input_context input;
     struct ohos_cliprdr cliprdr;
     struct ohos_rdpsnd rdpsnd;
+    struct ohos_rdpdr_print rdpdr_print;
     struct ohos_frame_trace frame_traces[OHOS_FRAME_TRACE_SLOTS];
 };
 

@@ -11,6 +11,7 @@
 #include "log.h"
 
 #include "ohos_private.h"
+#include "ohos_print.h"
 
 tintptr EXPORT_CC
 mod_init(void)
@@ -24,6 +25,7 @@ mod_init(void)
     ohos_input_init(&self->input);
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
     ohos_rdpsnd_init(&self->rdpsnd, &self->mod, self->frame_wait_obj);
+    ohos_rdpdr_print_init(&self->rdpdr_print, &self->mod);
     self->max_desktop_width = OHOS_DEFAULT_MAX_DESKTOP_WIDTH;
     self->max_desktop_height = OHOS_DEFAULT_MAX_DESKTOP_HEIGHT;
     self->mod.size = sizeof(struct mod);
@@ -60,6 +62,8 @@ mod_exit(tintptr handle)
         ohos_input_deinit(&self->input);
         ohos_cliprdr_deinit(&self->cliprdr);
         ohos_rdpsnd_deinit(&self->rdpsnd);
+        ohos_rdpdr_print_deinit(&self->rdpdr_print);
+        ohos_print_release();
         if (self->frame_wait_obj != 0)
         {
             g_delete_wait_obj(self->frame_wait_obj);

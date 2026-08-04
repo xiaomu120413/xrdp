@@ -60,7 +60,8 @@ xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info)
                           XRDP_OHOS_FEATURE_DIRECT_INPUT |
                           XRDP_OHOS_FEATURE_INTERNAL_CAPTURE |
                           XRDP_OHOS_FEATURE_CAPTURE_DIAGNOSTICS |
-                          XRDP_OHOS_FEATURE_INPUT_AUTHORIZATION;
+                          XRDP_OHOS_FEATURE_INPUT_AUTHORIZATION |
+                          XRDP_OHOS_FEATURE_PRINT;
     info->status_flags = 0;
     return XRDP_OHOS_BACKEND_STATUS_OK;
 }

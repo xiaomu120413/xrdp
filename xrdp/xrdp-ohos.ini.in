@@ -32,7 +32,7 @@ EnableProcessId=true
 [LoggingPerLogger]
 
 [Channels]
-rdpdr=false
+rdpdr=true
 rdpsnd=true
 drdynvc=true
 cliprdr=true
