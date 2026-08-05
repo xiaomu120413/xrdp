@@ -8,7 +8,10 @@
 
 #include "ohos_audin_renderer.h"
 
+extern "C"
+{
 #include "log.h"
+}
 
 #include <ohaudio/native_audiorenderer.h>
 #include <ohaudio/native_audiostreambuilder.h>

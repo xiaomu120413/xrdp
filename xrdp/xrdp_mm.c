@@ -177,6 +177,7 @@ xrdp_mm_module_cleanup(struct xrdp_mm *self)
 
     g_memset(self->mod_drdynvc_procs, 0,
              sizeof(self->mod_drdynvc_procs));
+    self->mod_drdynvc_ready_notified = 0;
 
     trans_delete(self->chan_trans);
     self->chan_trans = 0;
@@ -197,6 +198,27 @@ xrdp_mm_module_cleanup(struct xrdp_mm *self)
         xrdp_wm_set_login_state(self->wm, WMLS_RESET); /* reset session */
     }
 
+}
+
+/*****************************************************************************/
+static void
+xrdp_mm_notify_mod_drdynvc_ready(struct xrdp_mm *self)
+{
+    int mod_error;
+
+    if (!self->drdynvc_up || self->mod_drdynvc_ready_notified ||
+            self->mod == 0 || self->mod->mod_drdynvc_ready == 0)
+    {
+        return;
+    }
+    self->mod_drdynvc_ready_notified = 1;
+    mod_error = self->mod->mod_drdynvc_ready(self->mod);
+    if (mod_error != 0)
+    {
+        LOG(LOG_LEVEL_WARNING,
+            "Backend dynamic channel initialization failed %d",
+            mod_error);
+    }
 }
 
 /*****************************************************************************/
@@ -2022,16 +2044,8 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
 
     LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_drdynvc_up:");
 
-    if (self->mod != 0 && self->mod->mod_drdynvc_ready != 0)
-    {
-        int mod_error = self->mod->mod_drdynvc_ready(self->mod);
-        if (mod_error != 0)
-        {
-            LOG(LOG_LEVEL_WARNING,
-                "Backend dynamic channel initialization failed %d",
-                mod_error);
-        }
-    }
+    self->drdynvc_up = 1;
+    xrdp_mm_notify_mod_drdynvc_ready(self);
 
     error = egfx_initialize(self);
     if (error != 0)
@@ -5615,6 +5629,7 @@ xrdp_mm_setup_mod1(struct xrdp_mm *self)
             self->mod->server_set_pointer_system = server_set_pointer_system;
             self->mod->server_set_pointer_position = server_set_pointer_position;
             self->mod->si = &(self->wm->session->si);
+            xrdp_mm_notify_mod_drdynvc_ready(self);
         }
     }
 

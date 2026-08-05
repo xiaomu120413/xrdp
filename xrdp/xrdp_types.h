@@ -461,6 +461,8 @@ struct xrdp_mm
     int xr2cr_cid_map[256];
     int dynamic_monitor_chanid;
     const struct xrdp_mod_drdynvc_procs *mod_drdynvc_procs[256];
+    int drdynvc_up;
+    int mod_drdynvc_ready_notified;
     struct xrdp_egfx *egfx;
     int egfx_up;
     enum xrdp_egfx_flags egfx_flags;
