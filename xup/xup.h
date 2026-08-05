@@ -46,6 +46,18 @@ enum caps_processing_status
 
 struct source_info;
 struct xrdp_client_info;
+#if !defined(XRDP_MOD_DRDYNVC_PROCS_DEFINED)
+#define XRDP_MOD_DRDYNVC_PROCS_DEFINED
+struct xrdp_mod_drdynvc_procs
+{
+    int (*open_response)(void *mod, int chan_id,
+                         int creation_status);
+    int (*close_response)(void *mod, int chan_id);
+    int (*data_first)(void *mod, int chan_id,
+                      char *data, int bytes, int total_bytes);
+    int (*data)(void *mod, int chan_id, char *data, int bytes);
+};
+#endif
 
 struct mod
 {
@@ -74,7 +86,8 @@ struct mod
     int (*mod_server_monitor_full_invalidate)(struct mod *v,
             int width, int height);
     int (*mod_server_version_message)(struct mod *v);
-    tintptr mod_dumby[100 - 14]; /* align, 100 minus the number of mod
+    int (*mod_drdynvc_ready)(struct mod *v);
+    tintptr mod_dumby[100 - 15]; /* align, 100 minus the number of mod
                                  functions above */
     /* server functions */
     int (*server_begin_update)(struct mod *v);
@@ -192,7 +205,16 @@ struct mod
                            char *data, int data_bytes);
     int (*server_set_pointer_system)(struct mod *v, int pointer_type);
     int (*server_set_pointer_position)(struct mod *v, int x, int y);
-    tintptr server_dumby[100 - 53]; /* align, 100 minus the number of server
+    int (*server_drdynvc_open)(struct mod *v, const char *name, int flags,
+                               const struct xrdp_mod_drdynvc_procs *procs,
+                               int *chan_id);
+    int (*server_drdynvc_close)(struct mod *v, int chan_id);
+    int (*server_drdynvc_data_first)(struct mod *v, int chan_id,
+                                     const char *data, int data_bytes,
+                                     int total_data_bytes);
+    int (*server_drdynvc_data)(struct mod *v, int chan_id,
+                               const char *data, int data_bytes);
+    tintptr server_dumby[100 - 57]; /* align, 100 minus the number of server
                                      functions above */
     /* common */
     tintptr handle; /* pointer to self as long */

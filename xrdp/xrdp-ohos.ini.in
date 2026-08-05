@@ -45,6 +45,7 @@ lib=libxrdpohos.@lib_extension@
 username=ohos
 password=ask
 access_code=
+audin=true
 max_desktop_width=0
 max_desktop_height=0
 port=0

@@ -175,6 +175,9 @@ xrdp_mm_module_cleanup(struct xrdp_mm *self)
         g_xrdp_sync(xrdp_mm_sync_unload, self->mod_handle, 0);
     }
 
+    g_memset(self->mod_drdynvc_procs, 0,
+             sizeof(self->mod_drdynvc_procs));
+
     trans_delete(self->chan_trans);
     self->chan_trans = 0;
     self->mod_init = 0;
@@ -2018,6 +2021,17 @@ xrdp_mm_drdynvc_up(struct xrdp_mm *self)
     int error = 0;
 
     LOG_DEVEL(LOG_LEVEL_TRACE, "xrdp_mm_drdynvc_up:");
+
+    if (self->mod != 0 && self->mod->mod_drdynvc_ready != 0)
+    {
+        int mod_error = self->mod->mod_drdynvc_ready(self->mod);
+        if (mod_error != 0)
+        {
+            LOG(LOG_LEVEL_WARNING,
+                "Backend dynamic channel initialization failed %d",
+                mod_error);
+        }
+    }
 
     error = egfx_initialize(self);
     if (error != 0)
@@ -4996,6 +5010,167 @@ server_send_to_channel(struct xrdp_mod *mod, int channel_id,
 }
 
 /*****************************************************************************/
+static const struct xrdp_mod_drdynvc_procs *
+server_get_mod_drdynvc_procs(struct xrdp_process *process, int chan_id,
+                             struct xrdp_mod **mod)
+{
+    struct xrdp_mm *mm;
+
+    if (mod != 0)
+    {
+        *mod = 0;
+    }
+    if (process == 0 || process->wm == 0 || process->wm->mm == 0 ||
+            chan_id < 0 || chan_id >= 256)
+    {
+        return 0;
+    }
+    mm = process->wm->mm;
+    if (mod != 0)
+    {
+        *mod = mm->mod;
+    }
+    return mm->mod_drdynvc_procs[chan_id];
+}
+
+/*****************************************************************************/
+static int
+server_mod_drdynvc_open_response(struct xrdp_process *process, int chan_id,
+                                 int creation_status)
+{
+    struct xrdp_mod *mod;
+    struct xrdp_mm *mm;
+    const struct xrdp_mod_drdynvc_procs *procs =
+        server_get_mod_drdynvc_procs(process, chan_id, &mod);
+    int rv = 0;
+
+    if (procs != 0 && procs->open_response != 0 && mod != 0)
+    {
+        rv = procs->open_response(mod, chan_id, creation_status);
+    }
+    if (creation_status != 0 && process != 0 && process->wm != 0 &&
+            process->wm->mm != 0 && chan_id >= 0 && chan_id < 256)
+    {
+        mm = process->wm->mm;
+        mm->mod_drdynvc_procs[chan_id] = 0;
+    }
+    return rv;
+}
+
+/*****************************************************************************/
+static int
+server_mod_drdynvc_close_response(struct xrdp_process *process, int chan_id)
+{
+    struct xrdp_mod *mod;
+    struct xrdp_mm *mm;
+    const struct xrdp_mod_drdynvc_procs *procs =
+        server_get_mod_drdynvc_procs(process, chan_id, &mod);
+    int rv = 0;
+
+    if (procs != 0 && procs->close_response != 0 && mod != 0)
+    {
+        rv = procs->close_response(mod, chan_id);
+    }
+    if (process != 0 && process->wm != 0 && process->wm->mm != 0 &&
+            chan_id >= 0 && chan_id < 256)
+    {
+        mm = process->wm->mm;
+        mm->mod_drdynvc_procs[chan_id] = 0;
+    }
+    return rv;
+}
+
+/*****************************************************************************/
+static int
+server_mod_drdynvc_data_first(struct xrdp_process *process, int chan_id,
+                              char *data, int bytes, int total_bytes)
+{
+    struct xrdp_mod *mod;
+    const struct xrdp_mod_drdynvc_procs *procs =
+        server_get_mod_drdynvc_procs(process, chan_id, &mod);
+
+    return procs != 0 && procs->data_first != 0 && mod != 0 ?
+           procs->data_first(mod, chan_id, data, bytes, total_bytes) : 0;
+}
+
+/*****************************************************************************/
+static int
+server_mod_drdynvc_data(struct xrdp_process *process, int chan_id,
+                        char *data, int bytes)
+{
+    struct xrdp_mod *mod;
+    const struct xrdp_mod_drdynvc_procs *procs =
+        server_get_mod_drdynvc_procs(process, chan_id, &mod);
+
+    return procs != 0 && procs->data != 0 && mod != 0 ?
+           procs->data(mod, chan_id, data, bytes) : 0;
+}
+
+/*****************************************************************************/
+static int
+server_drdynvc_open(struct xrdp_mod *mod, const char *name, int flags,
+                    const struct xrdp_mod_drdynvc_procs *procs,
+                    int *chan_id)
+{
+    struct xrdp_wm *wm;
+    struct xrdp_drdynvc_procs core_procs;
+    int rv;
+
+    if (mod == 0 || name == 0 || procs == 0 || chan_id == 0)
+    {
+        return 1;
+    }
+    wm = (struct xrdp_wm *)mod->wm;
+    if (wm == 0 || wm->mm == 0 || wm->session == 0 || wm->mm->use_chansrv)
+    {
+        return 1;
+    }
+    g_memset(&core_procs, 0, sizeof(core_procs));
+    core_procs.open_response = server_mod_drdynvc_open_response;
+    core_procs.close_response = server_mod_drdynvc_close_response;
+    core_procs.data_first = server_mod_drdynvc_data_first;
+    core_procs.data = server_mod_drdynvc_data;
+    rv = libxrdp_drdynvc_open(wm->session, name, flags, &core_procs,
+                              chan_id);
+    if (rv == 0 && *chan_id >= 0 && *chan_id < 256)
+    {
+        wm->mm->mod_drdynvc_procs[*chan_id] = procs;
+    }
+    return rv;
+}
+
+/*****************************************************************************/
+static int
+server_drdynvc_close(struct xrdp_mod *mod, int chan_id)
+{
+    struct xrdp_wm *wm = mod == 0 ? 0 : (struct xrdp_wm *)mod->wm;
+    return wm == 0 || wm->session == 0 ? 1 :
+           libxrdp_drdynvc_close(wm->session, chan_id);
+}
+
+/*****************************************************************************/
+static int
+server_drdynvc_data_first(struct xrdp_mod *mod, int chan_id,
+                          const char *data, int data_bytes,
+                          int total_data_bytes)
+{
+    struct xrdp_wm *wm = mod == 0 ? 0 : (struct xrdp_wm *)mod->wm;
+    return wm == 0 || wm->session == 0 ? 1 :
+           libxrdp_drdynvc_data_first(wm->session, chan_id, data,
+                                      data_bytes, total_data_bytes);
+}
+
+/*****************************************************************************/
+static int
+server_drdynvc_data(struct xrdp_mod *mod, int chan_id,
+                    const char *data, int data_bytes)
+{
+    struct xrdp_wm *wm = mod == 0 ? 0 : (struct xrdp_wm *)mod->wm;
+    return wm == 0 || wm->session == 0 ? 1 :
+           libxrdp_drdynvc_data(wm->session, chan_id, data, data_bytes);
+}
+
+/*****************************************************************************/
 static int
 server_create_os_surface(struct xrdp_mod *mod, int rdpindex,
                          int width, int height)
@@ -5412,6 +5587,10 @@ xrdp_mm_setup_mod1(struct xrdp_mm *self)
             self->mod->server_query_channel = server_query_channel;
             self->mod->server_get_channel_id = server_get_channel_id;
             self->mod->server_send_to_channel = server_send_to_channel;
+            self->mod->server_drdynvc_open = server_drdynvc_open;
+            self->mod->server_drdynvc_close = server_drdynvc_close;
+            self->mod->server_drdynvc_data_first = server_drdynvc_data_first;
+            self->mod->server_drdynvc_data = server_drdynvc_data;
             self->mod->server_create_os_surface = server_create_os_surface;
             self->mod->server_switch_os_surface = server_switch_os_surface;
             self->mod->server_delete_os_surface = server_delete_os_surface;

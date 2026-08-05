@@ -118,8 +118,10 @@ if test "x$enable_ohos" = "xyes"; then
     [AC_MSG_ERROR([HarmonyOS key code header is required for --enable-ohos])])
   AC_CHECK_HEADER([BasicServicesKit/ohprint.h], [],
     [AC_MSG_ERROR([HarmonyOS print header BasicServicesKit/ohprint.h is required for --enable-ohos])])
+  AC_CHECK_HEADER([ohaudio/native_audiorenderer.h], [],
+    [AC_MSG_ERROR([HarmonyOS OHAudio renderer header is required for --enable-ohos])])
   XRDP_OHOS_LIBS="-lhilog_ndk.z"
-  XRDP_OHOS_BACKEND_LIBS="-lhilog_ndk.z -lpasteboard -ludmf -lohfileuri -lohprint -limage_ndk.z -limage_source -lpixelmap_ndk.z -lpixelmap -lnative_display_manager -lohinput -lnative_avscreen_capture -lnative_window -lnative_buffer -lnative_image -lnative_media_venc -lnative_media_codecbase -lnative_media_core -lEGL -lGLESv2"
+  XRDP_OHOS_BACKEND_LIBS="-lhilog_ndk.z -lpasteboard -ludmf -lohfileuri -lohprint -lohaudio -limage_ndk.z -limage_source -lpixelmap_ndk.z -lpixelmap -lnative_display_manager -lohinput -lnative_avscreen_capture -lnative_window -lnative_buffer -lnative_image -lnative_media_venc -lnative_media_codecbase -lnative_media_core -lEGL -lGLESv2"
   XRDP_OHOS_AVCODEC_LIBS="-lnative_media_venc -lnative_media_codecbase -lnative_media_core"
 fi
 AC_SUBST([XRDP_OHOS_LIBS])

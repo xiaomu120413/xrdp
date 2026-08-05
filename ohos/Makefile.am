@@ -28,6 +28,10 @@ libxrdpohos_la_SOURCES = \
   ohos_backend_api.c \
   ohos_audio_capture_bridge.cpp \
   ohos_audio_capture_bridge.h \
+  ohos_audin.c \
+  ohos_audin.h \
+  ohos_audin_renderer.cpp \
+  ohos_audin_renderer.h \
   ohos_cliprdr_bitmap.c \
   ohos_cliprdr_channel.c \
   ohos_cliprdr.c \

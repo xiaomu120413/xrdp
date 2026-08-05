@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "ohos_cliprdr.h"
+#include "ohos_audin.h"
 #include "ohos_cursor.h"
 #include "ohos_desktop_size.h"
 #include "ohos_gfx_avc420.h"
@@ -144,6 +145,7 @@ struct ohos_mod
     char access_code[64];
     char login_password[256];
     struct ohos_cursor_state cursor;
+    struct ohos_audin audin;
     struct ohos_input_context input;
     struct ohos_cliprdr cliprdr;
     struct ohos_rdpsnd rdpsnd;

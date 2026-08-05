@@ -312,6 +312,7 @@ ohos_mod_connect(struct mod *mod, int fd)
                                        "session_connect", 1);
     ohos_cursor_start_session(self);
     ohos_input_prime_authorization("session connect");
+    (void)ohos_audin_connect(&self->audin);
     (void)ohos_rdpdr_print_connect(&self->rdpdr_print);
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
@@ -474,6 +475,7 @@ ohos_mod_end(struct mod *mod)
     ohos_log_session_summary(self, "client_disconnect");
     ohos_cursor_end_session(self, "client_disconnect");
     ohos_input_reset(&self->input, "session end");
+    ohos_audin_disconnect(&self->audin, "session end");
     ohos_rdpdr_print_disconnect(&self->rdpdr_print);
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
@@ -522,6 +524,10 @@ ohos_mod_set_param(struct mod *mod, const char *name, const char *value)
     {
         self->max_desktop_height = ohos_parse_desktop_limit_param(
             value, self->max_desktop_height);
+    }
+    else if (g_strncmp(name, "audin", 255) == 0)
+    {
+        ohos_audin_set_enabled(&self->audin, g_text2bool(value));
     }
 
     LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.module: param %s=%s", name,
@@ -716,6 +722,13 @@ ohos_mod_server_version_message(struct mod *mod)
     return 0;
 }
 
+static int
+ohos_mod_drdynvc_ready(struct mod *mod)
+{
+    struct ohos_mod *self = ohos_from_mod(mod);
+    return ohos_audin_drdynvc_ready(&self->audin);
+}
+
 void
 ohos_bind_mod_callbacks(struct ohos_mod *self)
 {
@@ -738,4 +751,5 @@ ohos_bind_mod_callbacks(struct ohos_mod *self)
     self->mod.mod_server_monitor_full_invalidate =
         ohos_mod_server_monitor_full_invalidate;
     self->mod.mod_server_version_message = ohos_mod_server_version_message;
+    self->mod.mod_drdynvc_ready = ohos_mod_drdynvc_ready;
 }
