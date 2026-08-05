@@ -10,15 +10,20 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
+#include <accesstoken/ability_access_control.h>
 #include <multimodalinput/oh_input_manager.h>
 
 #define OHOS_INPUT_AUTH_RETRY_MS 5000ULL
+#define OHOS_CONTROL_DEVICE_RECHECK_MS 1000ULL
+#define OHOS_CONTROL_DEVICE_PERMISSION "ohos.permission.CONTROL_DEVICE"
 
 static atomic_int g_authorized_status = UNAUTHORIZED;
 static atomic_int g_authorization_requested = 0;
 static uint64_t g_last_authorization_request_ms = 0;
 static uint32_t g_authorization_log_count = 0;
 static int64_t g_last_mouse_action_time_ms = 0;
+static atomic_int g_control_device_authorized = 0;
+static uint64_t g_last_control_device_check_ms = 0;
 
 uint64_t
 ohos_input_now_ms(void)
@@ -46,10 +51,41 @@ ohos_input_next_mouse_action_time(void)
 void
 ohos_input_mark_unauthorized(void)
 {
+    atomic_store(&g_control_device_authorized, 0);
+    g_last_control_device_check_ms = 0;
     atomic_store(&g_authorized_status, UNAUTHORIZED);
     atomic_store(&g_authorization_requested, 0);
     LOG(LOG_LEVEL_WARNING,
         "xrdp.ohos.input: stage=auth_mark result=unauthorized reason=inject_permission_denied");
+}
+
+static int
+ohos_input_has_control_device_permission(void)
+{
+    uint64_t now_ms;
+
+    if (atomic_load(&g_control_device_authorized))
+    {
+        return 1;
+    }
+
+    now_ms = ohos_input_now_ms();
+    if (g_last_control_device_check_ms != 0 &&
+            now_ms >= g_last_control_device_check_ms &&
+            now_ms - g_last_control_device_check_ms < OHOS_CONTROL_DEVICE_RECHECK_MS)
+    {
+        return 0;
+    }
+
+    g_last_control_device_check_ms = now_ms;
+    if (OH_AT_CheckSelfPermission(OHOS_CONTROL_DEVICE_PERMISSION))
+    {
+        atomic_store(&g_control_device_authorized, 1);
+        LOG(LOG_LEVEL_INFO,
+            "xrdp.ohos.input: stage=auth_check result=authorized source=control_device");
+        return 1;
+    }
+    return 0;
 }
 
 static void
@@ -81,7 +117,8 @@ ohos_input_refresh_authorized_status(void)
     Input_InjectionStatus status = UNAUTHORIZED;
     Input_Result query_rc;
 
-    if (atomic_load(&g_authorized_status) == AUTHORIZED)
+    if (ohos_input_has_control_device_permission() ||
+            atomic_load(&g_authorized_status) == AUTHORIZED)
     {
         return 1;
     }
@@ -104,6 +141,11 @@ ohos_input_ensure_authorized(const char *reason)
     int should_request;
     int is_hot_path = ohos_input_auth_reason_is_hot_path(reason);
     Input_Result request_rc;
+
+    if (ohos_input_has_control_device_permission())
+    {
+        return 1;
+    }
 
     if (atomic_load(&g_authorized_status) == AUTHORIZED)
     {
