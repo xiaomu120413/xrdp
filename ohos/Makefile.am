@@ -92,6 +92,10 @@ libxrdpohos_la_SOURCES = \
   ohos_print.h \
   ohos_rdpdr_print.c \
   ohos_rdpdr_print.h \
+  ohos_rdpecam.c \
+  ohos_rdpecam.h \
+  ohos_rdpecam_internal.h \
+  ohos_rdpecam_protocol.c \
   ohos_rdpsnd.c \
   ohos_rdpsnd_channel.c \
   ohos_rdpsnd.h \

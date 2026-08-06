@@ -313,6 +313,7 @@ ohos_mod_connect(struct mod *mod, int fd)
     ohos_cursor_start_session(self);
     ohos_input_prime_authorization("session connect");
     (void)ohos_audin_connect(&self->audin);
+    (void)ohos_rdpecam_connect(&self->rdpecam);
     (void)ohos_rdpdr_print_connect(&self->rdpdr_print);
     (void)ohos_rdpsnd_connect(&self->rdpsnd);
     (void)ohos_cliprdr_connect(&self->cliprdr);
@@ -476,6 +477,7 @@ ohos_mod_end(struct mod *mod)
     ohos_cursor_end_session(self, "client_disconnect");
     ohos_input_reset(&self->input, "session end");
     ohos_audin_disconnect(&self->audin, "session end");
+    ohos_rdpecam_disconnect(&self->rdpecam, "session end");
     ohos_rdpdr_print_disconnect(&self->rdpdr_print);
     ohos_rdpsnd_disconnect(&self->rdpsnd);
     ohos_cliprdr_disconnect(&self->cliprdr);
@@ -528,6 +530,10 @@ ohos_mod_set_param(struct mod *mod, const char *name, const char *value)
     else if (g_strncmp(name, "audin", 255) == 0)
     {
         ohos_audin_set_enabled(&self->audin, g_text2bool(value));
+    }
+    else if (g_strncmp(name, "rdpecam", 255) == 0)
+    {
+        ohos_rdpecam_set_enabled(&self->rdpecam, g_text2bool(value));
     }
 
     LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.module: param %s=%s", name,
@@ -726,7 +732,9 @@ static int
 ohos_mod_drdynvc_ready(struct mod *mod)
 {
     struct ohos_mod *self = ohos_from_mod(mod);
-    return ohos_audin_drdynvc_ready(&self->audin);
+    int rv = ohos_audin_drdynvc_ready(&self->audin);
+    rv |= ohos_rdpecam_drdynvc_ready(&self->rdpecam);
+    return rv;
 }
 
 void

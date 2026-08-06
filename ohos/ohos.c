@@ -23,6 +23,7 @@ mod_init(void)
     self->frame_wait_obj = g_create_wait_obj("xrdp_ohos_frame");
     ohos_cursor_init(&self->cursor);
     ohos_audin_init(&self->audin, &self->mod);
+    ohos_rdpecam_init(&self->rdpecam, &self->mod);
     ohos_input_init(&self->input);
     ohos_cliprdr_init(&self->cliprdr, &self->mod, self->frame_wait_obj);
     ohos_rdpsnd_init(&self->rdpsnd, &self->mod, self->frame_wait_obj);
@@ -62,6 +63,7 @@ mod_exit(tintptr handle)
         ohos_discard_pending_frame(self);
         ohos_input_deinit(&self->input);
         ohos_audin_deinit(&self->audin);
+        ohos_rdpecam_deinit(&self->rdpecam);
         ohos_cliprdr_deinit(&self->cliprdr);
         ohos_rdpsnd_deinit(&self->rdpsnd);
         ohos_rdpdr_print_deinit(&self->rdpdr_print);

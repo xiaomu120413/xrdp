@@ -32,6 +32,10 @@ extern "C"
 #define XRDP_OHOS_FEATURE_CAPTURE_DIAGNOSTICS 0x00000400U
 #define XRDP_OHOS_FEATURE_INPUT_AUTHORIZATION 0x00000800U
 #define XRDP_OHOS_FEATURE_PRINT 0x00001000U
+#define XRDP_OHOS_FEATURE_RDPECAM 0x00002000U
+#define XRDP_OHOS_RDPECAM_EVENT_VERSION 1
+#define XRDP_OHOS_RDPECAM_NAME_BYTES 256
+#define XRDP_OHOS_RDPECAM_CHANNEL_BYTES 261
 #define XRDP_OHOS_INPUT_SESSION_CONNECT 0
 #define XRDP_OHOS_INPUT_SESSION_DISCONNECT -1
 #define XRDP_OHOS_WM_KEYDOWN 15
@@ -95,6 +99,27 @@ enum xrdp_ohos_backend_event_type
     XRDP_OHOS_BACKEND_EVENT_SUPPRESS_OUTPUT = 4,
     XRDP_OHOS_BACKEND_EVENT_MONITOR_RESIZE = 5,
     XRDP_OHOS_BACKEND_EVENT_MONITOR_FULL_INVALIDATE = 6
+};
+
+enum xrdp_ohos_rdpecam_event_type
+{
+    XRDP_OHOS_RDPECAM_EVENT_DEVICE_ADDED = 1,
+    XRDP_OHOS_RDPECAM_EVENT_DEVICE_REMOVED = 2,
+    XRDP_OHOS_RDPECAM_EVENT_STREAM_STARTED = 3,
+    XRDP_OHOS_RDPECAM_EVENT_SAMPLE = 4,
+    XRDP_OHOS_RDPECAM_EVENT_STREAM_STOPPED = 5,
+    XRDP_OHOS_RDPECAM_EVENT_ERROR = 6
+};
+
+enum xrdp_ohos_rdpecam_format
+{
+    XRDP_OHOS_RDPECAM_FORMAT_H264 = 1,
+    XRDP_OHOS_RDPECAM_FORMAT_MJPG = 2,
+    XRDP_OHOS_RDPECAM_FORMAT_YUY2 = 3,
+    XRDP_OHOS_RDPECAM_FORMAT_NV12 = 4,
+    XRDP_OHOS_RDPECAM_FORMAT_I420 = 5,
+    XRDP_OHOS_RDPECAM_FORMAT_RGB24 = 6,
+    XRDP_OHOS_RDPECAM_FORMAT_RGB32 = 7
 };
 
 struct xrdp_ohos_abi_info
@@ -239,10 +264,31 @@ struct xrdp_ohos_backend_event
     uint64_t ack_us;
 };
 
+struct xrdp_ohos_rdpecam_event
+{
+    uint32_t size;
+    uint32_t version;
+    uint32_t type;
+    int32_t status;
+    uint32_t format;
+    uint32_t width;
+    uint32_t height;
+    uint32_t frame_rate_numerator;
+    uint32_t frame_rate_denominator;
+    uint32_t stream_index;
+    uint64_t sequence;
+    const void *data;
+    uint32_t data_bytes;
+    char device_name[XRDP_OHOS_RDPECAM_NAME_BYTES];
+    char channel_name[XRDP_OHOS_RDPECAM_CHANNEL_BYTES];
+};
+
 typedef void (*xrdp_ohos_input_event_fn)(
     const struct xrdp_ohos_input_event *event, void *user_data);
 typedef void (*xrdp_ohos_backend_event_fn)(
     const struct xrdp_ohos_backend_event *event, void *user_data);
+typedef void (*xrdp_ohos_rdpecam_event_fn)(
+    const struct xrdp_ohos_rdpecam_event *event, void *user_data);
 
 XRDP_OHOS_API int
 xrdp_ohos_backend_get_abi_info(struct xrdp_ohos_abi_info *info);
@@ -292,6 +338,10 @@ xrdp_ohos_backend_set_input_callback(xrdp_ohos_input_event_fn callback,
 XRDP_OHOS_API int
 xrdp_ohos_backend_set_event_callback(xrdp_ohos_backend_event_fn callback,
                                      void *user_data);
+
+XRDP_OHOS_API int
+xrdp_ohos_backend_set_rdpecam_callback(
+    xrdp_ohos_rdpecam_event_fn callback, void *user_data);
 
 #ifdef __cplusplus
 }

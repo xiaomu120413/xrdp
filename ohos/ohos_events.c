@@ -12,6 +12,8 @@ static xrdp_ohos_input_event_fn g_ohos_input_callback = 0;
 static void *g_ohos_input_callback_user = 0;
 static xrdp_ohos_backend_event_fn g_ohos_event_callback = 0;
 static void *g_ohos_event_callback_user = 0;
+static xrdp_ohos_rdpecam_event_fn g_ohos_rdpecam_callback = 0;
+static void *g_ohos_rdpecam_callback_user = 0;
 
 static int
 ohos_should_log_forwarded_input(int msg)
@@ -226,6 +228,53 @@ xrdp_ohos_backend_set_event_callback(xrdp_ohos_backend_event_fn callback,
     ohos_unlock_input_state();
 
     LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.event: callback %s",
+        callback == 0 ? "cleared" : "registered");
+    return 0;
+}
+
+int
+ohos_rdpecam_callback_registered(void)
+{
+    int registered;
+    if (ohos_lock_input_state() != 0)
+    {
+        return 0;
+    }
+    registered = g_ohos_rdpecam_callback != 0;
+    ohos_unlock_input_state();
+    return registered;
+}
+
+void
+ohos_forward_rdpecam_event(const struct xrdp_ohos_rdpecam_event *event)
+{
+    xrdp_ohos_rdpecam_event_fn callback;
+    void *user_data;
+    if (event == 0 || ohos_lock_input_state() != 0)
+    {
+        return;
+    }
+    callback = g_ohos_rdpecam_callback;
+    user_data = g_ohos_rdpecam_callback_user;
+    ohos_unlock_input_state();
+    if (callback != 0)
+    {
+        callback(event, user_data);
+    }
+}
+
+int EXPORT_CC
+xrdp_ohos_backend_set_rdpecam_callback(
+    xrdp_ohos_rdpecam_event_fn callback, void *user_data)
+{
+    if (ohos_lock_input_state() != 0)
+    {
+        return 1;
+    }
+    g_ohos_rdpecam_callback = callback;
+    g_ohos_rdpecam_callback_user = user_data;
+    ohos_unlock_input_state();
+    LOG(LOG_LEVEL_DEBUG, "xrdp.ohos.rdpecam: callback %s",
         callback == 0 ? "cleared" : "registered");
     return 0;
 }
