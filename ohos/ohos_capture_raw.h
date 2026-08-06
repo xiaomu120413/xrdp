@@ -41,6 +41,8 @@ private:
     void LogSampledError(const std::string& message, uint64_t count);
 
     CaptureSubmitCallbacks callbacks_;
+    // Serialize Start/Stop without blocking AVScreenCapture callbacks on the state lock.
+    std::mutex lifecycleMutex_;
     std::mutex mutex_;
     std::condition_variable condition_;
     OH_AVScreenCapture* capture_ = nullptr;

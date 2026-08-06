@@ -82,11 +82,14 @@ bool RawScreenCapture::Start(CaptureOptions options, std::string& message)
         return false;
     }
 
-    std::unique_lock<std::mutex> lock(mutex_);
-    target_ = options;
-    if (running_) {
-        message = "xrdp screen capture already running " + DescribeCaptureOptions(target_);
-        return true;
+    std::lock_guard<std::mutex> lifecycleLock(lifecycleMutex_);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        target_ = options;
+        if (running_) {
+            message = "xrdp screen capture already running " + DescribeCaptureOptions(target_);
+            return true;
+        }
     }
 
     OH_AVScreenCapture* capture = OH_AVScreenCapture_Create();
@@ -122,28 +125,34 @@ bool RawScreenCapture::Start(CaptureOptions options, std::string& message)
     OH_AVScreenCapture_SetMaxVideoFrameRate(capture, static_cast<int32_t>(options.frameRate));
     OH_AVScreenCapture_ShowCursor(capture, options.showCursor);
 
-    running_ = true;
-    capture_ = capture;
-    videoReady_ = false;
-    readyCount_ = 0;
-    captureErrorCount_ = 0;
-    submittedCount_.store(0);
-    droppedCount_.store(0);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        running_ = true;
+        capture_ = capture;
+        videoReady_ = false;
+        readyCount_ = 0;
+        captureErrorCount_ = 0;
+        submittedCount_.store(0);
+        droppedCount_.store(0);
+    }
     audioPump_.Start(capture, "raw");
     worker_ = std::thread([this]() { WorkerLoop(); });
 
     rc = OH_AVScreenCapture_StartScreenCapture(capture);
     if (rc != AV_SCREEN_CAPTURE_ERR_OK) {
-        running_ = false;
-        videoReady_ = false;
+        std::thread worker;
+        OH_AVScreenCapture* failedCapture = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            running_ = false;
+            videoReady_ = false;
+            worker = std::move(worker_);
+            failedCapture = capture_;
+            capture_ = nullptr;
+        }
         condition_.notify_one();
-        std::thread worker = std::move(worker_);
-        OH_AVScreenCapture* failedCapture = capture_;
-        capture_ = nullptr;
         if (worker.joinable()) {
-            lock.unlock();
             worker.join();
-            lock.lock();
         }
         audioPump_.Stop("raw start failed");
         ReleaseFailedCapture(failedCapture);
@@ -159,6 +168,7 @@ bool RawScreenCapture::Start(CaptureOptions options, std::string& message)
 
 void RawScreenCapture::Stop(const std::string& reason)
 {
+    std::lock_guard<std::mutex> lifecycleLock(lifecycleMutex_);
     OH_AVScreenCapture* capture = nullptr;
     std::thread worker;
     CaptureOptions stoppedOptions;
